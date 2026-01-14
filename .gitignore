@@ -137,5 +137,6 @@ models
 matcher_training_data
 server_logs
 data
+minutiae_patches
 
 .pylintrc

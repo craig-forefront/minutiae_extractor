@@ -15,7 +15,41 @@ import itertools
 import numpy as np
 import matplotlib.pyplot as plt
 from tensorflow.keras import models, layers, backend as keras_backend
-from keras_applications import imagenet_utils
+from tensorflow.keras.applications import imagenet_utils
+
+
+def _obtain_input_shape(input_shape, default_size, min_size, data_format, require_flatten, weights=None):
+    """Validates and returns input shape for the model.
+
+    Reimplementation of keras_applications.imagenet_utils._obtain_input_shape
+    for compatibility with modern Keras/TensorFlow.
+    """
+    if data_format == 'channels_first':
+        default_shape = (3, default_size, default_size)
+    else:
+        default_shape = (default_size, default_size, 3)
+
+    if input_shape is None:
+        return default_shape
+
+    if len(input_shape) != 3:
+        raise ValueError(f'input_shape must be a tuple of 3 integers, got {input_shape}')
+
+    if data_format == 'channels_first':
+        if input_shape[1] is not None and input_shape[1] < min_size:
+            raise ValueError(f'Input height must be >= {min_size}, got {input_shape[1]}')
+        if input_shape[2] is not None and input_shape[2] < min_size:
+            raise ValueError(f'Input width must be >= {min_size}, got {input_shape[2]}')
+    else:
+        if input_shape[0] is not None and input_shape[0] < min_size:
+            raise ValueError(f'Input height must be >= {min_size}, got {input_shape[0]}')
+        if input_shape[1] is not None and input_shape[1] < min_size:
+            raise ValueError(f'Input width must be >= {min_size}, got {input_shape[1]}')
+
+    if require_flatten and None in input_shape:
+        raise ValueError('When require_flatten=True, input_shape cannot have None dimensions')
+
+    return input_shape
 
 
 def preprocess_input(raw_input):
@@ -107,7 +141,7 @@ def get_fine_net_model(
 
     """
     # Determine proper input shape
-    input_shape = imagenet_utils._obtain_input_shape(  # pylint: disable=protected-access
+    input_shape = _obtain_input_shape(
         input_shape,
         default_size=299,
         min_size=139,

@@ -222,7 +222,7 @@ def conv(x, filters, kernel_size, downsampling=False, activation='leaky', batch_
     if activation == 'mish':
         x = mish_activation(x)
     elif activation == 'leaky':
-        x = layers.LeakyReLU(alpha=0.1)(x)
+        x = layers.LeakyReLU(negative_slope=0.1)(x)
     return x
 
 
