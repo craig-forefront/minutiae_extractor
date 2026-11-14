@@ -147,14 +147,13 @@ def get_coarse_net_model(input_shape=(400, 400, 1), weights_path=None, mode='tra
     # enhance part
     filters_cos, filters_sin = minutiae_net_utils.gabor_bank(stride=2, lambda_value=8)
 
-    # Create Conv2D layers without weights parameter (Keras 3.x compatibility)
+    # Keras 3.x no longer accepts a weights argument, the Gabor bank is set below
     filter_img_real = layers.Conv2D(
         filters_cos.shape[3],
         (filters_cos.shape[0],
          filters_cos.shape[1]),
         kernel_initializer='zeros',
         bias_initializer='zeros',
-        trainable=False,
         padding='same', name='enh_img_real_1')(img_input)
     
     filter_img_imag = layers.Conv2D(
@@ -163,7 +162,6 @@ def get_coarse_net_model(input_shape=(400, 400, 1), weights_path=None, mode='tra
          filters_sin.shape[1]),
         kernel_initializer='zeros',
         bias_initializer='zeros',
-        trainable=False,
         padding='same', name='enh_img_imag_1')(img_input)
 
     ori_peak = layers.Lambda(coarse_net_utils.ori_highest_peak, 
@@ -289,25 +287,17 @@ def get_coarse_net_model(input_shape=(400, 400, 1), weights_path=None, mode='tra
                 mnt_h_out,
                 mnt_s_out])
 
+    # Initialise the enhancement layers with the analytic Gabor bank first. The
+    # pretrained checkpoint holds fine-tuned versions of these filters, so the
+    # checkpoint has to be loaded afterwards or its values would be discarded.
+    model.get_layer('enh_img_real_1').set_weights(
+        [filters_cos, np.zeros([filters_cos.shape[3]])])
+    model.get_layer('enh_img_imag_1').set_weights(
+        [filters_sin, np.zeros([filters_sin.shape[3]])])
+
     if weights_path is not None:
         model.load_weights(weights_path, by_name=True)
-    
-    # Set Gabor filter weights after model is built (Keras 3.x compatibility)
-    try:
-        # Get the Gabor filters
-        filters_cos, filters_sin = minutiae_net_utils.gabor_bank(stride=2, lambda_value=8)
-        
-        # Set weights for the real part filter
-        real_layer = model.get_layer('enh_img_real_1')
-        real_layer.set_weights([filters_cos, np.zeros([filters_cos.shape[3]])])
-        
-        # Set weights for the imaginary part filter  
-        imag_layer = model.get_layer('enh_img_imag_1')
-        imag_layer.set_weights([filters_sin, np.zeros([filters_sin.shape[3]])])
-        
-    except Exception as e:
-        print(f"Warning: Could not set Gabor filter weights: {e}")
-    
+
     return model
 
 
@@ -553,9 +543,9 @@ def fuse_minu_orientation(dir_map, mnt, mode=1, block_size=16):
 
     if mode == 1:
         for k in range(mnt.shape[0]):
-            # Choose nearest orientation with proper rounding instead of truncation
-            row_idx = int(np.round(mnt[k, 1] / block_size))
-            col_idx = int(np.round(mnt[k, 0] / block_size))
+            # Block (i, j) of dir_map covers pixels [i * block_size, (i + 1) * block_size)
+            row_idx = int(mnt[k, 1] // block_size)
+            col_idx = int(mnt[k, 0] // block_size)
             
             # Ensure indices are within bounds
             row_idx = max(0, min(row_idx, dir_h - 1))
@@ -641,9 +631,9 @@ def fuse_minu_orientation(dir_map, mnt, mode=1, block_size=16):
         return
     elif mode == 3:
         for k in range(mnt.shape[0]):
-            # Choose nearest orientation with proper rounding instead of truncation
-            row_idx = int(np.round(mnt[k, 1] / block_size))
-            col_idx = int(np.round(mnt[k, 0] / block_size))
+            # Block (i, j) of dir_map covers pixels [i * block_size, (i + 1) * block_size)
+            row_idx = int(mnt[k, 1] // block_size)
+            col_idx = int(mnt[k, 0] // block_size)
             
             # Ensure indices are within bounds
             row_idx = max(0, min(row_idx, dir_h - 1))

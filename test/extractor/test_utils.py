@@ -93,7 +93,7 @@ class GetMinutiaePatchTest(unittest.TestCase):
             (100, 100, 2))
         mock_patch_center = (50, 21)
 
-        mock_output_patch = mock_input_image[28:72, 0:44]
+        mock_output_patch = mock_input_image[0:44, 28:72]
 
         result_output_patch = utils.get_minutiae_patch(
             mock_patch_center[0], mock_patch_center[1], mock_input_image)
@@ -107,7 +107,7 @@ class GetMinutiaePatchTest(unittest.TestCase):
             (100, 100, 2))
         mock_patch_center = (50, 79)
 
-        mock_output_patch = mock_input_image[28:72, 56:100]
+        mock_output_patch = mock_input_image[56:100, 28:72]
 
         result_output_patch = utils.get_minutiae_patch(
             mock_patch_center[0], mock_patch_center[1], mock_input_image)
@@ -121,7 +121,7 @@ class GetMinutiaePatchTest(unittest.TestCase):
             (100, 100, 2))
         mock_patch_center = (21, 50)
 
-        mock_output_patch = mock_input_image[0:44, 28:72]
+        mock_output_patch = mock_input_image[28:72, 0:44]
 
         result_output_patch = utils.get_minutiae_patch(
             mock_patch_center[0], mock_patch_center[1], mock_input_image)
@@ -135,7 +135,7 @@ class GetMinutiaePatchTest(unittest.TestCase):
             (100, 100, 2))
         mock_patch_center = (79, 50)
 
-        mock_output_patch = mock_input_image[56:100, 28:72]
+        mock_output_patch = mock_input_image[28:72, 56:100]
 
         result_output_patch = utils.get_minutiae_patch(
             mock_patch_center[0], mock_patch_center[1], mock_input_image)
@@ -163,7 +163,7 @@ class GetMinutiaePatchTest(unittest.TestCase):
             (100, 100, 2))
         mock_patch_center = (79, 21)
 
-        mock_output_patch = mock_input_image[56:100, 0:44]
+        mock_output_patch = mock_input_image[0:44, 56:100]
 
         result_output_patch = utils.get_minutiae_patch(
             mock_patch_center[0], mock_patch_center[1], mock_input_image)
@@ -177,7 +177,7 @@ class GetMinutiaePatchTest(unittest.TestCase):
             (100, 100, 2))
         mock_patch_center = (21, 79)
 
-        mock_output_patch = mock_input_image[0:44, 56:100]
+        mock_output_patch = mock_input_image[56:100, 0:44]
 
         result_output_patch = utils.get_minutiae_patch(
             mock_patch_center[0], mock_patch_center[1], mock_input_image)
@@ -192,6 +192,17 @@ class GetMinutiaePatchTest(unittest.TestCase):
         mock_patch_center = (79, 79)
 
         mock_output_patch = mock_input_image[56:100, 56:100]
+
+        result_output_patch = utils.get_minutiae_patch(
+            mock_patch_center[0], mock_patch_center[1], mock_input_image)
+
+        np.testing.assert_array_equal(result_output_patch, mock_output_patch)
+
+    def test_patch_on_non_square_image(self):
+        mock_input_image = np.arange(200 * 100).reshape((200, 100))
+        mock_patch_center = (30, 150)
+
+        mock_output_patch = mock_input_image[128:172, 8:52]
 
         result_output_patch = utils.get_minutiae_patch(
             mock_patch_center[0], mock_patch_center[1], mock_input_image)

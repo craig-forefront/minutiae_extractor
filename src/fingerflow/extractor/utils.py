@@ -35,9 +35,10 @@ def get_minutiae_patch_coordinate(patch_center, image_size):
 
 
 def get_minutiae_patch(x, y, image):
-    x_start, x_end = get_minutiae_patch_coordinate(int(x), image.shape[0])
-    y_start, y_end = get_minutiae_patch_coordinate(int(y), image.shape[1])
-    patch_minu = image[x_start:x_end, y_start:y_end]
+    # x is the column and y is the row, so the image is indexed as image[y, x]
+    x_start, x_end = get_minutiae_patch_coordinate(int(x), image.shape[1])
+    y_start, y_end = get_minutiae_patch_coordinate(int(y), image.shape[0])
+    patch_minu = image[y_start:y_end, x_start:x_end]
 
     return patch_minu
 
