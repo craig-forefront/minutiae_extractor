@@ -102,9 +102,10 @@ A Pandas DataFrame with extracted and classified minutiae points:
 |--------|-------------|
 | `x` | X coordinate of the minutiae point |
 | `y` | Y coordinate of the minutiae point |
-| `angle` | Direction of the minutia in radians (0 to 2π), in image axes: the direction vector is `(cos(angle), sin(angle))` with y pointing down. The ridge orientation is reliable; which of the two opposite directions is reported is not stable for every point |
+| `angle` | Direction of the minutia in radians (0 to 2π), in image axes: the direction vector is `(cos(angle), sin(angle))` with y pointing down. It points back along the ridge for an ending and into the valley between the two branches for a bifurcation (ISO 19794-2 convention) |
 | `score` | Extraction confidence score (0-1) |
 | `class` | Minutiae type as a numeric code: `0` ending, `1` bifurcation, `2` fragment, `3` enclosure, `4` crossbar, `5` other |
+| `direction_confidence` | Confidence of the direction sense (about 0-1). Below about 0.15 the choice between the two opposite directions is a guess. Present only when `refine_direction` is on |
 
 Example:
 ```python
@@ -116,6 +117,19 @@ high_confidence = minutiae_df[minutiae_df['score'] > 0.8]
 endings = minutiae_df[minutiae_df['class'] == 0]
 bifurcations = minutiae_df[minutiae_df['class'] == 1]
 ```
+
+##### Direction sense
+
+The ridge orientation that CoarseNet reports for a minutia is reliable, but which of the two
+opposite directions it reports is not: with the released weights it changes for roughly a
+quarter to a half of the minutiae when the image is shifted by a few pixels or rotated. By
+default the extractor therefore takes the sense from the ridge pattern in the image
+(`refine_direction=True`). The pattern has one more ridge on one side of a minutia than on
+the other, and the direction points to that side. Where the CoarseNet orientation differs by
+more than 25 degrees from the orientation measured in the image, the measured one is used.
+
+This step assumes about 500 dpi. For other resolutions pass `image_dpi`. Pass
+`refine_direction=False` to get the CoarseNet direction unchanged.
 
 #### Core DataFrame
 
@@ -150,7 +164,7 @@ The main class for fingerprint feature extraction.
 #### Constructor
 
 ```python
-Extractor(coarse_net, fine_net, classify_net, core_net)
+Extractor(coarse_net, fine_net, classify_net, core_net, refine_direction=True, image_dpi=500)
 ```
 
 **Parameters:**
@@ -158,6 +172,8 @@ Extractor(coarse_net, fine_net, classify_net, core_net)
 - `fine_net` (str): Path to the fine network model
 - `classify_net` (str): Path to the classification network model
 - `core_net` (str): Path to the core detection network model
+- `refine_direction` (bool): Take the direction sense of the minutiae from the image instead of from CoarseNet (default `True`)
+- `image_dpi` (float): Resolution of the input images, used by the direction step only (default `500`)
 
 #### Methods
 
