@@ -105,7 +105,7 @@ A Pandas DataFrame with extracted and classified minutiae points:
 | `angle` | Direction of the minutia in radians (0 to 2π), in image axes: the direction vector is `(cos(angle), sin(angle))` with y pointing down. It points back along the ridge for an ending and into the valley between the two branches for a bifurcation (ISO 19794-2 convention) |
 | `score` | Extraction confidence score (0-1) |
 | `class` | Minutiae type as a numeric code: `0` ending, `1` bifurcation, `2` fragment, `3` enclosure, `4` crossbar, `5` other |
-| `direction_confidence` | Confidence of the direction sense (about 0-1). Below about 0.15 the choice between the two opposite directions is a guess. Present only when `refine_direction` is on |
+| `direction_confidence` | Confidence of the direction sense, typically 0-1 and occasionally higher. On synthetic test prints the sense was right for about 99% of minutiae at 0.25 and above, and for 70-85% below that. Present only when `refine_direction` is on |
 
 Example:
 ```python
@@ -128,8 +128,18 @@ default the extractor therefore takes the sense from the ridge pattern in the im
 the other, and the direction points to that side. Where the CoarseNet orientation differs by
 more than 25 degrees from the orientation measured in the image, the measured one is used.
 
-This step assumes about 500 dpi. For other resolutions pass `image_dpi`. Pass
-`refine_direction=False` to get the CoarseNet direction unchanged.
+`image_dpi` sets the scale of this step. What matters is the ridge period in pixels: the
+default of 500 expects about 9 px from ridge to ridge, so a suitable value is roughly
+`500 * period_px / 9`. The value is tolerant downwards and not upwards: on test images with
+an 8.4 px period, values from 250 to 450 gave the same accuracy, 500 was slightly worse and
+600 clearly worse. Below about 250 and above about 1000 the step is not usable.
+
+The improvement was measured on synthetic (SFinGe) prints with ground truth, where the sense
+was right for 97% of the detected minutiae against 70% for CoarseNet, and as consistency of
+the result when an image is shifted or rotated. It has not been measured on real prints with
+ground truth: the only such data at hand are the two latent images that ship with
+MinutiaeNet, where CoarseNet was right for 24 of 25 minutiae and this step for 21 of 25.
+Pass `refine_direction=False` to get the CoarseNet direction unchanged.
 
 #### Core DataFrame
 

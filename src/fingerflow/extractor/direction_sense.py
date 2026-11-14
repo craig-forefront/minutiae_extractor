@@ -72,12 +72,19 @@ def _gabor_pair(period):
     return real, imag
 
 
-def sense_score(normalized_image, x, y, angle, scale=1.0):
-    """Signed score in about [-1, 1] for a minutia at (x, y) with ridge tangent `angle`.
+def gabor_bank(scale=1.0):
+    return [_gabor_pair(period * scale) for period in RIDGE_PERIODS]
+
+
+def sense_score(normalized_image, x, y, angle, scale=1.0, bank=None):
+    """Signed score for a minutia at (x, y) with ridge tangent `angle`.
 
     Positive: `angle` already points in the conventional direction. Negative: it has to be
-    turned by pi. The magnitude is a confidence.
+    turned by pi. The magnitude is a confidence, typically between 0 and 1.
     """
+    if bank is None:
+        bank = gabor_bank(scale)
+
     sigma = WINDOW_SIGMA * scale
     half = int(np.ceil(3.6 * sigma))
     size = 2 * half + 1
@@ -93,8 +100,7 @@ def sense_score(normalized_image, x, y, angle, scale=1.0):
     window = np.exp(-0.5 * (u ** 2 + v ** 2) / sigma ** 2)
 
     total = 0.0
-    for period in RIDGE_PERIODS:
-        real, imag = _gabor_pair(period * scale)
+    for real, imag in bank:
         phase = np.arctan2(
             -cv2.filter2D(patch, cv2.CV_32F, imag, borderType=cv2.BORDER_REFLECT),
             cv2.filter2D(patch, cv2.CV_32F, real, borderType=cv2.BORDER_REFLECT))
@@ -104,7 +110,7 @@ def sense_score(normalized_image, x, y, angle, scale=1.0):
         charge = np.round((d_v[:, 1:] - d_u[1:, :] - d_v[:, :-1] + d_u[:-1, :]) / (2 * np.pi))
         total += float((charge * window).sum())
 
-    return total / len(RIDGE_PERIODS)
+    return total / len(bank)
 
 
 def refine_minutiae_direction(image, minutiae, image_dpi=REFERENCE_DPI):
@@ -114,9 +120,15 @@ def refine_minutiae_direction(image, minutiae, image_dpi=REFERENCE_DPI):
     angle modulo pi is used; when it differs by more than 25 degrees from the ridge
     orientation measured in the image, the measured orientation replaces it.
 
+    `image_dpi` scales the filters; they expect a ridge period of about 9 px at 500.
+
     Returns a copy of `minutiae` with the new angles in [0, 2 pi) and an array with one
-    confidence per minutia (about 0-1; below about 0.15 the sense is a guess).
+    confidence per minutia (typically 0-1, occasionally higher; the sense is dependable
+    from about 0.25).
     """
+    if not np.isfinite(image_dpi) or image_dpi <= 0:
+        raise ValueError(f'image_dpi has to be a positive number, got {image_dpi}')
+
     refined = np.array(minutiae, dtype=float, copy=True)
     confidence = np.zeros(refined.shape[0])
 
@@ -126,6 +138,7 @@ def refine_minutiae_direction(image, minutiae, image_dpi=REFERENCE_DPI):
     scale = float(image_dpi) / REFERENCE_DPI
     normalized = normalize_contrast(image, scale)
     orientation = local_orientation(normalized, scale)
+    bank = gabor_bank(scale)
     rows, cols = orientation.shape
 
     for idx in range(refined.shape[0]):
@@ -139,7 +152,7 @@ def refine_minutiae_direction(image, minutiae, image_dpi=REFERENCE_DPI):
         if abs(_wrap(2 * (angle - measured))) / 2 > ORIENTATION_GUARD:
             angle = measured
 
-        score = sense_score(normalized, float(x), float(y), angle, scale)
+        score = sense_score(normalized, float(x), float(y), angle, scale, bank)
 
         refined[idx, 2] = (angle if score >= 0 else angle + np.pi) % (2 * np.pi)
         confidence[idx] = abs(score)

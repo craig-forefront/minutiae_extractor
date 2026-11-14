@@ -71,15 +71,74 @@ class RefineMinutiaeDirectionTest(unittest.TestCase):
 
         self.assertLess(circular_distance(refined[0, 2], given), 1e-9)
 
-    def test_image_dpi_scales_the_ridge_period(self):
+    def test_image_dpi_scales_the_filters(self):
         direction = np.radians(250)
-        image = dislocation_image(direction, period=7.0)
-        minutiae = np.array([[100., 100., direction + np.pi, 0.9, 0.]])
-        refined, confidence = direction_sense.refine_minutiae_direction(
-            image, minutiae, image_dpi=350)
+
+        for period, image_dpi in ((5.0, 250), (40.0, 1000)):
+            image = dislocation_image(direction, period=period, size=401)
+            minutiae = np.array([[200., 200., direction + np.pi, 0.9, 0.]])
+            refined, confidence = direction_sense.refine_minutiae_direction(
+                image, minutiae, image_dpi=image_dpi)
+            _, default_confidence = direction_sense.refine_minutiae_direction(image, minutiae)
+
+            self.assertLess(circular_distance(refined[0, 2], direction), np.radians(10))
+            self.assertGreater(confidence[0], 0.5)
+            self.assertLess(default_confidence[0], confidence[0] / 2)
+
+    def test_invalid_image_dpi(self):
+        image = dislocation_image(0.0)
+        minutiae = np.array([[100., 100., 0., 0.9, 0.]])
+
+        for image_dpi in (0, -500, float('nan')):
+            with self.assertRaises(ValueError):
+                direction_sense.refine_minutiae_direction(image, minutiae, image_dpi=image_dpi)
+
+    def test_off_centre_minutia_on_non_square_image(self):
+        direction = np.radians(20)
+        rows, cols = np.mgrid[0:160, 0:300].astype(float)
+        cols -= 215
+        rows -= 60
+        u = cols * np.cos(direction) + rows * np.sin(direction)
+        v = -cols * np.sin(direction) + rows * np.cos(direction)
+        image = (127 + 100 * np.cos(2 * np.pi * v / 10 + np.arctan2(v, u))).astype(np.uint8)
+
+        # 70 degrees off, so the orientation has to be looked up at the right pixel as well
+        minutiae = np.array([[215., 60., direction + np.radians(70), 0.9, 0.]])
+        refined, confidence = direction_sense.refine_minutiae_direction(image, minutiae)
 
         self.assertLess(circular_distance(refined[0, 2], direction), np.radians(10))
         self.assertGreater(confidence[0], 0.5)
+
+    def test_guard_threshold(self):
+        direction = np.radians(30)
+        image = dislocation_image(direction)
+
+        kept = direction + np.radians(19)
+        refined, _ = direction_sense.refine_minutiae_direction(
+            image, np.array([[100., 100., kept, 0.9, 0.]]))
+        self.assertLess(circular_distance(refined[0, 2], kept), 1e-9)
+
+        refined, _ = direction_sense.refine_minutiae_direction(
+            image, np.array([[100., 100., direction + np.radians(32), 0.9, 0.]]))
+        self.assertLess(circular_distance(refined[0, 2], direction), np.radians(10))
+
+    def test_guard_across_the_wrap(self):
+        # orientations 175 and 5 degrees are 10 degrees apart
+        direction = np.radians(175)
+        image = dislocation_image(direction)
+        given = np.radians(5)
+        refined, _ = direction_sense.refine_minutiae_direction(
+            image, np.array([[100., 100., given, 0.9, 0.]]))
+
+        self.assertLess(circular_distance(refined[0, 2], given + np.pi), 1e-9)
+
+    def test_blank_image_has_no_confidence(self):
+        image = np.full((120, 120), 200, dtype=np.uint8)
+        refined, confidence = direction_sense.refine_minutiae_direction(
+            image, np.array([[60., 60., 1.0, 0.9, 0.]]))
+
+        self.assertTrue(np.isfinite(refined).all())
+        self.assertLess(confidence[0], 0.05)
 
     def test_minutia_near_border(self):
         direction = np.radians(90)
@@ -87,7 +146,7 @@ class RefineMinutiaeDirectionTest(unittest.TestCase):
         minutiae = np.array([[6., 195., direction, 0.9, 0.]])
         refined, confidence = direction_sense.refine_minutiae_direction(image, minutiae)
 
-        self.assertTrue(np.isfinite(refined).all())
+        self.assertLess(circular_distance(refined[0, 2], direction), np.radians(15))
         self.assertTrue(np.isfinite(confidence).all())
 
     def test_other_columns_and_input_are_untouched(self):

@@ -10,6 +10,9 @@ class Extractor:
         # refine_direction: take the direction sense of the minutiae from the ridge pattern
         # instead of the CoarseNet output, which is not stable. image_dpi is used only by
         # this step.
+        if not isinstance(image_dpi, (int, float)) or not image_dpi > 0:
+            raise ValueError(f'image_dpi has to be a positive number, got {image_dpi}')
+
         self.__refine_direction = refine_direction
         self.__image_dpi = image_dpi
         self.__extraction_module = MinutiaeNet(coarse_net_path, fine_net_path)
