@@ -533,191 +533,40 @@ def evaluate_training(model_dir, test_set, logging=None, finenet_path=None):
 
 
 def fuse_minu_orientation(dir_map, mnt, mode=1, block_size=16):
-    # mode is the way to fuse output minutiae with orientation
-    # 1: use orientation; 2: use minutiae; 3: fuse average
-    # blk_h, blk_w = dir_map.shape
-    dir_map = dir_map % (2 * np.pi)
-    
-    # Get dir_map dimensions for bounds checking
+    """Fuse the minutiae angles (in place) with the ridge orientation map.
+
+    dir_map holds ridge orientations, which are only defined modulo pi, so the
+    orientation is first turned into a direction by picking whichever of ori and
+    ori + pi is closer to the minutia angle.
+
+    mode 1: use that direction; mode 2: keep the minutia angle;
+    mode 3: use the circular mean of the two.
+    """
+    if mode not in (1, 3):
+        return
+
     dir_h, dir_w = dir_map.shape
 
-    if mode == 1:
-        for k in range(mnt.shape[0]):
-            # Block (i, j) of dir_map covers pixels [i * block_size, (i + 1) * block_size)
-            row_idx = int(mnt[k, 1] // block_size)
-            col_idx = int(mnt[k, 0] // block_size)
-            
-            # Ensure indices are within bounds
-            row_idx = max(0, min(row_idx, dir_h - 1))
-            col_idx = max(0, min(col_idx, dir_w - 1))
-            
-            ori_value = dir_map[row_idx, col_idx]
-            if mnt[k, 2] > 0 and mnt[k, 2] <= np.pi / 2:
-                if ori_value > 0 and ori_value <= np.pi / 2:
-                    mnt[k, 2] = ori_value
-                if np.pi / 2 < ori_value and ori_value <= np.pi:
-                    if (ori_value - mnt[k, 2]) < (np.pi -
-                                                  ori_value + mnt[k, 2]):
-                        mnt[k, 2] = ori_value
-                    else:
-                        mnt[k, 2] = ori_value + np.pi
-                if np.pi < ori_value and ori_value <= 3 * np.pi / 2:
-                    mnt[k, 2] = ori_value - np.pi
-                if 3 * np.pi / 2 < ori_value and ori_value <= 2 * np.pi:
-                    if (np.pi * 2 - ori_value +
-                            mnt[k, 2]) < (ori_value - np.pi - mnt[k, 2]):
-                        mnt[k, 2] = ori_value
-                    else:
-                        mnt[k, 2] = ori_value - np.pi
-            if np.pi / 2 < mnt[k, 2] and mnt[k, 2] <= np.pi:
-                if ori_value > 0 and ori_value <= np.pi / 2:
-                    if (mnt[k, 2] - ori_value) < (np.pi -
-                                                  ori_value + mnt[k, 2]):
-                        mnt[k, 2] = ori_value
-                    else:
-                        mnt[k, 2] = ori_value + np.pi
-                if np.pi / 2 < ori_value and ori_value <= np.pi:
-                    mnt[k, 2] = ori_value
-                if np.pi < ori_value and ori_value <= 3 * np.pi / 2:
-                    if (ori_value -
-                        mnt[k, 2]) < (mnt[k, 2] -
-                                      ori_value +
-                                      np.pi):
-                        mnt[k, 2] = ori_value
-                    else:
-                        mnt[k, 2] = ori_value - np.pi
-                if 3 * np.pi / 2 < ori_value and ori_value <= 2 * np.pi:
-                    mnt[k, 2] = ori_value - np.pi
-            if np.pi < mnt[k, 2] and mnt[k, 2] <= 3 * np.pi / 2:
-                if ori_value > 0 and ori_value <= np.pi / 2:
-                    mnt[k, 2] = ori_value + np.pi
-                if np.pi / 2 < ori_value and ori_value <= np.pi:
-                    if (mnt[k, 2] - ori_value) < (ori_value + np.pi - mnt[k, 2]):
-                        mnt[k, 2] = ori_value
-                    else:
-                        mnt[k, 2] = ori_value + np.pi
-                if np.pi < ori_value and ori_value <= 3 * np.pi / 2:
-                    mnt[k, 2] = ori_value
-                if 3 * np.pi / 2 < ori_value and ori_value <= 2 * np.pi:
-                    if (ori_value -
-                        mnt[k, 2]) < (mnt[k, 2] -
-                                      ori_value +
-                                      np.pi):
-                        mnt[k, 2] = ori_value
-                    else:
-                        mnt[k, 2] = ori_value - np.pi
-            if 3 * np.pi / 2 < mnt[k, 2] and mnt[k, 2] <= 2 * np.pi:
-                if ori_value > 0 and ori_value <= np.pi / 2:
-                    if (np.pi -
-                        mnt[k, 2] +
-                        ori_value) < (mnt[k, 2] -
-                                      np.pi -
-                                      ori_value):
-                        mnt[k, 2] = ori_value
-                    else:
-                        mnt[k, 2] = ori_value + np.pi
-                if np.pi / 2 < ori_value and ori_value <= np.pi:
-                    mnt[k, 2] = ori_value + np.pi
-                if np.pi < ori_value and ori_value <= 3 * np.pi / 2:
-                    if (mnt[k, 2] - ori_value) < (np.pi *
-                                                  2 - mnt[k, 2] + ori_value - np.pi):
-                        mnt[k, 2] = ori_value
-                    else:
-                        mnt[k, 2] = ori_value - np.pi
-                if 3 * np.pi / 2 < ori_value and ori_value <= 2 * np.pi:
-                    mnt[k, 2] = ori_value
+    for k in range(mnt.shape[0]):
+        # Block (i, j) of dir_map covers pixels [i * block_size, (i + 1) * block_size)
+        row_idx = max(0, min(int(mnt[k, 1] // block_size), dir_h - 1))
+        col_idx = max(0, min(int(mnt[k, 0] // block_size), dir_w - 1))
 
-    elif mode == 2:
-        return
-    elif mode == 3:
-        for k in range(mnt.shape[0]):
-            # Block (i, j) of dir_map covers pixels [i * block_size, (i + 1) * block_size)
-            row_idx = int(mnt[k, 1] // block_size)
-            col_idx = int(mnt[k, 0] // block_size)
-            
-            # Ensure indices are within bounds
-            row_idx = max(0, min(row_idx, dir_h - 1))
-            col_idx = max(0, min(col_idx, dir_w - 1))
-            
-            ori_value = dir_map[row_idx, col_idx]
-            if mnt[k, 2] > 0 and mnt[k, 2] <= np.pi / 2:
-                if ori_value > 0 and ori_value <= np.pi / 2:
-                    fixed_ori = ori_value
-                if np.pi / 2 < ori_value and ori_value <= np.pi:
-                    if (ori_value - mnt[k, 2]) < (np.pi -
-                                                  ori_value + mnt[k, 2]):
-                        fixed_ori = ori_value
-                    else:
-                        fixed_ori = ori_value + np.pi
-                if np.pi < ori_value and ori_value <= 3 * np.pi / 2:
-                    fixed_ori = ori_value - np.pi
-                if 3 * np.pi / 2 < ori_value and ori_value <= 2 * np.pi:
-                    if (np.pi * 2 - ori_value +
-                            mnt[k, 2]) < (ori_value - np.pi - mnt[k, 2]):
-                        fixed_ori = ori_value
-                    else:
-                        fixed_ori = ori_value - np.pi
-            if np.pi / 2 < mnt[k, 2] and mnt[k, 2] <= np.pi:
-                if ori_value > 0 and ori_value <= np.pi / 2:
-                    if (mnt[k, 2] - ori_value) < (np.pi -
-                                                  ori_value + mnt[k, 2]):
-                        fixed_ori = ori_value
-                    else:
-                        fixed_ori = ori_value + np.pi
-                if np.pi / 2 < ori_value and ori_value <= np.pi:
-                    fixed_ori = ori_value
-                if np.pi < ori_value and ori_value <= 3 * np.pi / 2:
-                    if (ori_value -
-                        mnt[k, 2]) < (mnt[k, 2] -
-                                      ori_value +
-                                      np.pi):
-                        fixed_ori = ori_value
-                    else:
-                        fixed_ori = ori_value - np.pi
-                if 3 * np.pi / 2 < ori_value and ori_value <= 2 * np.pi:
-                    fixed_ori = ori_value - np.pi
-            if np.pi < mnt[k, 2] and mnt[k, 2] <= 3 * np.pi / 2:
-                if ori_value > 0 and ori_value <= np.pi / 2:
-                    fixed_ori = ori_value + np.pi
-                if np.pi / 2 < ori_value and ori_value <= np.pi:
-                    if (mnt[k, 2] - ori_value) < (ori_value + np.pi - mnt[k, 2]):
-                        fixed_ori = ori_value
-                    else:
-                        fixed_ori = ori_value + np.pi
-                if np.pi < ori_value and ori_value <= 3 * np.pi / 2:
-                    fixed_ori = ori_value
-                if 3 * np.pi / 2 < ori_value and ori_value <= 2 * np.pi:
-                    if (ori_value -
-                        mnt[k, 2]) < (mnt[k, 2] -
-                                      ori_value +
-                                      np.pi):
-                        fixed_ori = ori_value
-                    else:
-                        fixed_ori = ori_value - np.pi
-            if 3 * np.pi / 2 < mnt[k, 2] and mnt[k, 2] <= 2 * np.pi:
-                if ori_value > 0 and ori_value <= np.pi / 2:
-                    if (np.pi -
-                        mnt[k, 2] +
-                        ori_value) < (mnt[k, 2] -
-                                      np.pi -
-                                      ori_value):
-                        fixed_ori = ori_value
-                    else:
-                        fixed_ori = ori_value + np.pi
-                if np.pi / 2 < ori_value and ori_value <= np.pi:
-                    fixed_ori = ori_value + np.pi
-                if np.pi < ori_value and ori_value <= 3 * np.pi / 2:
-                    if (mnt[k, 2] - ori_value) < (np.pi *
-                                                  2 - mnt[k, 2] + ori_value - np.pi):
-                        fixed_ori = ori_value
-                    else:
-                        fixed_ori = ori_value - np.pi
-                if 3 * np.pi / 2 < ori_value and ori_value <= 2 * np.pi:
-                    fixed_ori = ori_value
+        angle = mnt[k, 2]
+        fixed_ori = dir_map[row_idx, col_idx]
 
-            mnt[k, 2] = (mnt[k, 2] + fixed_ori) / 2.0
-    else:
-        return
+        # Signed difference wrapped to (-pi, pi]
+        delta = np.angle(np.exp(1j * (fixed_ori - angle)))
+        if abs(delta) > np.pi / 2:
+            fixed_ori = fixed_ori + np.pi
+
+        if mode == 1:
+            fused = fixed_ori
+        else:
+            # Averaging the raw values is wrong when the two straddle 0 / 2*pi
+            fused = np.angle(np.exp(1j * angle) + np.exp(1j * fixed_ori))
+
+        mnt[k, 2] = fused % (2 * np.pi)
 
 
 def deploy_with_gt(

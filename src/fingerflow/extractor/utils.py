@@ -4,6 +4,30 @@ import numpy as np
 from . import constants
 
 
+def normalize_image_data(raw_image_data):
+    """Return the image as an 8-bit, 3-channel BGR array, as the networks expect."""
+    image_data = np.asarray(raw_image_data)
+
+    if image_data.dtype != np.uint8:
+        raise ValueError(
+            f'Expected an 8-bit (uint8) image, got {image_data.dtype}. '
+            'Convert the image to uint8 with values in 0-255 first.')
+
+    if image_data.ndim == 2:
+        return cv2.cvtColor(image_data, cv2.COLOR_GRAY2BGR)
+
+    if image_data.ndim == 3 and image_data.shape[2] == 1:
+        return cv2.cvtColor(image_data[:, :, 0], cv2.COLOR_GRAY2BGR)
+
+    if image_data.ndim == 3 and image_data.shape[2] == 4:
+        return np.ascontiguousarray(image_data[:, :, :3])
+
+    if image_data.ndim == 3 and image_data.shape[2] == 3:
+        return image_data
+
+    raise ValueError(f'Expected a grayscale, BGR or BGRA image, got shape {image_data.shape}')
+
+
 def preprocess_image_data(raw_image_data):
     image_data = np.array(cv2.cvtColor(raw_image_data, cv2.COLOR_BGR2GRAY))
     image_size = np.array(image_data.shape, dtype=np.int32) // 8 * 8

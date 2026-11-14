@@ -31,6 +31,32 @@ class PreprocessImageDataTest(unittest.TestCase):
             mock_output_data.get('image'))
 
 
+class NormalizeImageDataTest(unittest.TestCase):
+    def test_bgr_image_is_unchanged(self):
+        mock_input_data = np.arange(4 * 5 * 3, dtype=np.uint8).reshape((4, 5, 3))
+
+        np.testing.assert_array_equal(utils.normalize_image_data(mock_input_data), mock_input_data)
+
+    def test_grayscale_image_is_expanded(self):
+        mock_input_data = np.arange(20, dtype=np.uint8).reshape((4, 5))
+        mock_output_data = np.stack([mock_input_data] * 3, axis=-1)
+
+        np.testing.assert_array_equal(
+            utils.normalize_image_data(mock_input_data), mock_output_data)
+        np.testing.assert_array_equal(
+            utils.normalize_image_data(mock_input_data[:, :, np.newaxis]), mock_output_data)
+
+    def test_alpha_channel_is_dropped(self):
+        mock_input_data = np.arange(4 * 5 * 4, dtype=np.uint8).reshape((4, 5, 4))
+
+        np.testing.assert_array_equal(
+            utils.normalize_image_data(mock_input_data), mock_input_data[:, :, :3])
+
+    def test_non_uint8_image_is_rejected(self):
+        with self.assertRaises(ValueError):
+            utils.normalize_image_data(np.zeros((4, 5, 3), dtype=np.float32))
+
+
 class GetMinutiaePatchCoordinateTest(unittest.TestCase):
     # patch should be aligned to the patch center
     def test_coordinates_without_shift(self):

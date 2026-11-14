@@ -11,6 +11,8 @@ class Extractor:
         self.__core_detection_module = CoreNet(core_net_path)
 
     def extract_minutiae(self, image_data):
+        image_data = utils.normalize_image_data(image_data)
+
         preprocessed_image = utils.preprocess_image_data(image_data)
 
         extracted_points = self.__extraction_module.extract_minutiae_points(

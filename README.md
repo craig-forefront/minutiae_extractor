@@ -102,19 +102,19 @@ A Pandas DataFrame with extracted and classified minutiae points:
 |--------|-------------|
 | `x` | X coordinate of the minutiae point |
 | `y` | Y coordinate of the minutiae point |
-| `angle` | Direction of minutiae point rotation (in radians) |
+| `angle` | Direction of the minutia in radians (0 to 2π), in image axes: the direction vector is `(cos(angle), sin(angle))` with y pointing down. The ridge orientation is reliable; which of the two opposite directions is reported is not stable for every point |
 | `score` | Extraction confidence score (0-1) |
-| `class` | Minutiae type: `ending`, `bifurcation`, `fragment`, `enclosure`, `crossbar`, or `other` |
+| `class` | Minutiae type as a numeric code: `0` ending, `1` bifurcation, `2` fragment, `3` enclosure, `4` crossbar, `5` other |
 
 Example:
 ```python
-minutiae_df = extracted_minutiae.minutiae
+minutiae_df = extracted_minutiae['minutiae']
 print(f"Found {len(minutiae_df)} minutiae points")
 
 high_confidence = minutiae_df[minutiae_df['score'] > 0.8]
 
-endings = minutiae_df[minutiae_df['class'] == 'ending']
-bifurcations = minutiae_df[minutiae_df['class'] == 'bifurcation']
+endings = minutiae_df[minutiae_df['class'] == 0]
+bifurcations = minutiae_df[minutiae_df['class'] == 1]
 ```
 
 #### Core DataFrame
@@ -133,7 +133,7 @@ A Pandas DataFrame with detected fingerprint cores:
 
 Example:
 ```python
-cores_df = extracted_minutiae.core
+cores_df = extracted_minutiae['core']
 print(f"Found {len(cores_df)} core region(s)")
 
 if len(cores_df) > 0:
@@ -166,10 +166,10 @@ Extractor(coarse_net, fine_net, classify_net, core_net)
 Extracts minutiae points and detects fingerprint cores from an input image.
 
 **Parameters:**
-- `image_data` (numpy.ndarray): Input image as a 3D matrix (e.g., output of `cv2.imread()`)
+- `image_data` (numpy.ndarray): 8-bit (`uint8`) image with dark ridges on a light background, e.g. the output of `cv2.imread()`. Grayscale (2D), BGR and BGRA arrays are accepted
 
 **Returns:**
-- An object containing:
+- A dictionary containing:
   - `minutiae`: Pandas DataFrame with minutiae information
   - `core`: Pandas DataFrame with core detection information
 
