@@ -105,7 +105,7 @@ A Pandas DataFrame with extracted and classified minutiae points:
 | `angle` | Direction of the minutia in radians (0 to 2π), in image axes: the direction vector is `(cos(angle), sin(angle))` with y pointing down. It points back along the ridge for an ending and into the valley between the two branches for a bifurcation (ISO 19794-2 convention) |
 | `score` | Extraction confidence score (0-1) |
 | `class` | Minutiae type as a numeric code: `0` ending, `1` bifurcation, `2` fragment, `3` enclosure, `4` crossbar, `5` other |
-| `direction_confidence` | Confidence of the direction sense, typically 0-1 and occasionally higher. On real test prints the sense was right for about 98% of minutiae at 0.25 and above, and much less often below that (see Direction sense). Present only when `refine_direction` is on |
+| `direction_confidence` | Confidence of the direction sense, typically 0-1 and occasionally higher. On real test prints the sense was right for 95-99% of minutiae at 0.25 and above, and much less often below that (see Direction sense). Present only when `refine_direction` is on |
 
 Example:
 ```python
@@ -126,31 +126,37 @@ quarter to a half of the minutiae when the image is shifted by a few pixels or r
 default the extractor therefore takes the sense from the ridge pattern in the image
 (`refine_direction=True`). The pattern has one more ridge on one side of a minutia than on
 the other, and the direction points to that side. Where the CoarseNet orientation differs by
-more than 25 degrees from the orientation measured in the image, the measured one is used.
+more than 15 degrees from the orientation measured in the image, the measured one is used.
 
 `image_dpi` sets the scale of this step: pass the resolution of the image. What matters is
 the ridge period in pixels. The default of 500 suits ordinary 500 ppi prints, whose ridges
 are about 8 to 11 px apart; for other images a suitable value is roughly
-`500 * period_px / 9.5`. The setting is tolerant: on the real prints described below, values
-from 350 to 550 gave 95 to 96% and 300 and 600 gave 93%; at 700 it fell to 87%.
+`500 * period_px / 9.5`. The setting is tolerant: on the exemplar prints described below,
+values from 450 to 600 gave 96%, 400 and 650 gave 95%, and at 800 it fell to 87%.
 
-Measured against examiner-marked minutiae on 259 rolled and slap prints of 119 subjects from
-NIST SD 302 (500 ppi, native or downsampled from 1000 ppi), the sense agreed with the
-examiner for 95.7% of the detected minutiae that have an examiner mark within 10 px, against
-68.6% for CoarseNet. About 6% of such pairings are chance matches, so the true figures are a
-little higher for this step and about 70% for CoarseNet. When the image is cropped by a few
-pixels or rotated by 180 degrees, 4.8% of the re-found minutiae reverse direction, against
-31% for CoarseNet. On synthetic (SFinGe) prints the step is right for about 97%.
+Measured against examiner-marked minutiae from NIST SD 302, at 500 ppi (native or
+downsampled from 1000 ppi), counting detected minutiae that have an examiner mark within
+10 px:
 
-`direction_confidence` tells how clear the pattern was. On the same data 90% of the minutiae
-had a value of at least 0.25 and the sense was right for 98% of those; below 0.25 it is
-much less reliable, and below 0.1 no better than CoarseNet.
+| | Sense agrees with the examiner | CoarseNet | Reverses under a small crop or 180 degree rotation | CoarseNet |
+|---|---|---|---|---|
+| Rolled and slap exemplars (259 prints, 119 subjects, 11,577 minutiae) | 96.6% | 68.6% | 4.0% | 31% |
+| Latents (325 prints, 118 subjects, 1,863 minutiae) | 91.8% | 59.3% | 6.0% | 43% |
 
-Limits of this evidence: all marks come from one examiner, the figures cover only minutiae
-the extractor finds (it finds about 41% of the marked ones, at 76% precision), and latent
-prints have not been measured beyond the two latent images that ship with MinutiaeNet, where
-CoarseNet was right for 24 of 25 minutiae and the earlier, longer filters of this step for
-21 of 25. Pass `refine_direction=False` to get the CoarseNet direction unchanged.
+Some of these pairings are chance matches (about 6% on exemplars, 9% on latents), so the
+true agreement is a little higher. On synthetic (SFinGe) prints the step is right for
+about 98%.
+
+`direction_confidence` tells how clear the pattern was. A value of at least 0.25 is reached
+by 92% of these minutiae on exemplars and 88% on latents, and the sense is then right for
+99% and 95%; below 0.25 it is much less reliable, and below 0.1 no better than CoarseNet.
+
+Limits of this evidence: all marks come from one examiner; the filter sizes and the
+15 degree threshold were chosen on half of the exemplar subjects, so the exemplar figures
+are slightly optimistic (the latents were not used for the choice); and the figures cover
+only minutiae the extractor finds. It finds about 41% of the marked minutiae on exemplars
+(76% of its detections have a mark) and 29% on latents (64%), where it returns a median of
+7 minutiae per print. Pass `refine_direction=False` to get the CoarseNet direction unchanged.
 
 #### Core DataFrame
 

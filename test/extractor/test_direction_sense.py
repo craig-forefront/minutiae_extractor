@@ -74,7 +74,7 @@ class RefineMinutiaeDirectionTest(unittest.TestCase):
     def test_image_dpi_scales_the_filters(self):
         direction = np.radians(250)
 
-        for period, image_dpi in ((4.0, 250), (40.0, 1000)):
+        for period, image_dpi in ((3.5, 250), (40.0, 1000)):
             image = dislocation_image(direction, period=period, size=401)
             minutiae = np.array([[200., 200., direction + np.pi, 0.9, 0.]])
             refined, confidence = direction_sense.refine_minutiae_direction(
@@ -113,13 +113,13 @@ class RefineMinutiaeDirectionTest(unittest.TestCase):
         direction = np.radians(30)
         image = dislocation_image(direction)
 
-        kept = direction + np.radians(19)
+        kept = direction + np.radians(11)
         refined, _ = direction_sense.refine_minutiae_direction(
             image, np.array([[100., 100., kept, 0.9, 0.]]))
         self.assertLess(circular_distance(refined[0, 2], kept), 1e-9)
 
         refined, _ = direction_sense.refine_minutiae_direction(
-            image, np.array([[100., 100., direction + np.radians(32), 0.9, 0.]]))
+            image, np.array([[100., 100., direction + np.radians(20), 0.9, 0.]]))
         self.assertLess(circular_distance(refined[0, 2], direction), np.radians(10))
 
     def test_guard_across_the_wrap(self):

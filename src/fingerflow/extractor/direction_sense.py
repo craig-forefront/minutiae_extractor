@@ -19,11 +19,11 @@ import cv2
 import numpy as np
 
 REFERENCE_DPI = 500.0
-RIDGE_PERIODS = (5.6, 7.2, 8.8, 10.4)  # px at 500 dpi
-WINDOW_SIGMA = 8.0  # px at 500 dpi
+RIDGE_PERIODS = (4.9, 6.3, 7.7, 9.1)  # px at 500 dpi
+WINDOW_SIGMA = 7.0  # px at 500 dpi
 ORIENTATION_SIGMA = 6.0  # px at 500 dpi
 CONTRAST_SIGMA = 8.0  # px at 500 dpi
-ORIENTATION_GUARD = np.radians(25)
+ORIENTATION_GUARD = np.radians(15)
 
 
 def _wrap(angle):
@@ -117,7 +117,7 @@ def refine_minutiae_direction(image, minutiae, image_dpi=REFERENCE_DPI):
     """Set the direction sense of every minutia from the image.
 
     `minutiae` is an (N, >=3) array with x, y, angle in the first three columns. Only the
-    angle modulo pi is used; when it differs by more than 25 degrees from the ridge
+    angle modulo pi is used; when it differs by more than 15 degrees from the ridge
     orientation measured in the image, the measured orientation replaces it.
 
     `image_dpi` scales the filters; they expect a ridge period of about 9 px at 500.
