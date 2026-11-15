@@ -102,20 +102,61 @@ A Pandas DataFrame with extracted and classified minutiae points:
 |--------|-------------|
 | `x` | X coordinate of the minutiae point |
 | `y` | Y coordinate of the minutiae point |
-| `angle` | Direction of minutiae point rotation (in radians) |
+| `angle` | Direction of the minutia in radians (0 to 2π), in image axes: the direction vector is `(cos(angle), sin(angle))` with y pointing down. It points back along the ridge for an ending and into the valley between the two branches for a bifurcation (ISO 19794-2 convention) |
 | `score` | Extraction confidence score (0-1) |
-| `class` | Minutiae type: `ending`, `bifurcation`, `fragment`, `enclosure`, `crossbar`, or `other` |
+| `class` | Minutiae type as a numeric code: `0` ending, `1` bifurcation, `2` fragment, `3` enclosure, `4` crossbar, `5` other |
+| `direction_confidence` | Confidence of the direction sense, typically 0-1 and occasionally higher. On real test prints the sense was right for 95-99% of minutiae at 0.25 and above, and much less often below that (see Direction sense). Present only when `refine_direction` is on |
 
 Example:
 ```python
-minutiae_df = extracted_minutiae.minutiae
+minutiae_df = extracted_minutiae['minutiae']
 print(f"Found {len(minutiae_df)} minutiae points")
 
 high_confidence = minutiae_df[minutiae_df['score'] > 0.8]
 
-endings = minutiae_df[minutiae_df['class'] == 'ending']
-bifurcations = minutiae_df[minutiae_df['class'] == 'bifurcation']
+endings = minutiae_df[minutiae_df['class'] == 0]
+bifurcations = minutiae_df[minutiae_df['class'] == 1]
 ```
+
+##### Direction sense
+
+The ridge orientation that CoarseNet reports for a minutia is reliable, but which of the two
+opposite directions it reports is not: with the released weights it changes for roughly a
+quarter to a half of the minutiae when the image is shifted by a few pixels or rotated. By
+default the extractor therefore takes the sense from the ridge pattern in the image
+(`refine_direction=True`). The pattern has one more ridge on one side of a minutia than on
+the other, and the direction points to that side. Where the CoarseNet orientation differs by
+more than 15 degrees from the orientation measured in the image, the measured one is used.
+
+`image_dpi` sets the scale of this step: pass the resolution of the image. What matters is
+the ridge period in pixels. The default of 500 suits ordinary 500 ppi prints, whose ridges
+are about 8 to 11 px apart; for other images a suitable value is roughly
+`500 * period_px / 9.5`. The setting is tolerant: on the exemplar prints described below,
+values from 450 to 600 gave 96%, 400 and 650 gave 95%, and at 800 it fell to 87%.
+
+Measured against examiner-marked minutiae from NIST SD 302, at 500 ppi (native or
+downsampled from 1000 ppi), counting detected minutiae that have an examiner mark within
+10 px:
+
+| | Sense agrees with the examiner | CoarseNet | Reverses under a small crop or 180 degree rotation | CoarseNet |
+|---|---|---|---|---|
+| Rolled and slap exemplars (259 prints, 119 subjects, 11,577 minutiae) | 96.6% | 68.6% | 4.0% | 31% |
+| Latents (325 prints, 118 subjects, 1,863 minutiae) | 91.8% | 59.3% | 6.0% | 43% |
+
+Some of these pairings are chance matches (about 6% on exemplars, 9% on latents), so the
+true agreement is a little higher. On synthetic (SFinGe) prints the step is right for
+about 98%.
+
+`direction_confidence` tells how clear the pattern was. A value of at least 0.25 is reached
+by 92% of these minutiae on exemplars and 88% on latents, and the sense is then right for
+99% and 95%; below 0.25 it is much less reliable, and below 0.1 no better than CoarseNet.
+
+Limits of this evidence: all marks come from one examiner; the filter sizes and the
+15 degree threshold were chosen on half of the exemplar subjects, so the exemplar figures
+are slightly optimistic (the latents were not used for the choice); and the figures cover
+only minutiae the extractor finds. It finds about 41% of the marked minutiae on exemplars
+(76% of its detections have a mark) and 29% on latents (64%), where it returns a median of
+7 minutiae per print. Pass `refine_direction=False` to get the CoarseNet direction unchanged.
 
 #### Core DataFrame
 
@@ -133,7 +174,7 @@ A Pandas DataFrame with detected fingerprint cores:
 
 Example:
 ```python
-cores_df = extracted_minutiae.core
+cores_df = extracted_minutiae['core']
 print(f"Found {len(cores_df)} core region(s)")
 
 if len(cores_df) > 0:
@@ -150,7 +191,7 @@ The main class for fingerprint feature extraction.
 #### Constructor
 
 ```python
-Extractor(coarse_net, fine_net, classify_net, core_net)
+Extractor(coarse_net, fine_net, classify_net, core_net, refine_direction=True, image_dpi=500)
 ```
 
 **Parameters:**
@@ -158,6 +199,8 @@ Extractor(coarse_net, fine_net, classify_net, core_net)
 - `fine_net` (str): Path to the fine network model
 - `classify_net` (str): Path to the classification network model
 - `core_net` (str): Path to the core detection network model
+- `refine_direction` (bool): Take the direction sense of the minutiae from the image instead of from CoarseNet (default `True`)
+- `image_dpi` (float): Resolution of the input images, used by the direction step only (default `500`)
 
 #### Methods
 
@@ -166,10 +209,10 @@ Extractor(coarse_net, fine_net, classify_net, core_net)
 Extracts minutiae points and detects fingerprint cores from an input image.
 
 **Parameters:**
-- `image_data` (numpy.ndarray): Input image as a 3D matrix (e.g., output of `cv2.imread()`)
+- `image_data` (numpy.ndarray): 8-bit (`uint8`) image with dark ridges on a light background, e.g. the output of `cv2.imread()`. Grayscale (2D), BGR and BGRA arrays are accepted
 
 **Returns:**
-- An object containing:
+- A dictionary containing:
   - `minutiae`: Pandas DataFrame with minutiae information
   - `core`: Pandas DataFrame with core detection information
 

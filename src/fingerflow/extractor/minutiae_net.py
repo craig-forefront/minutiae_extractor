@@ -45,7 +45,7 @@ class MinutiaeNet:
         seg_out = cv2.dilate(seg_out, kernel)
 
         # ========== Adaptive threshold ==================
-        final_minutiae_score_threashold = 0.6
+        final_minutiae_score_threashold = 0.45
         early_minutiae_thres = final_minutiae_score_threashold + 0.05
 
         # In cases of small amount of minutiae given, try adaptive threshold
