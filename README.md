@@ -211,6 +211,13 @@ Extracts minutiae points and detects fingerprint cores from an input image.
 **Parameters:**
 - `image_data` (numpy.ndarray): 8-bit (`uint8`) image with dark ridges on a light background, e.g. the output of `cv2.imread()`. Grayscale (2D), BGR and BGRA arrays are accepted
 
+The minutiae networks work at one fixed scale, about 500 ppi, and the extractor does not
+rescale the image (`image_dpi` is used by the direction step only). Resample images of any
+other resolution to 500 ppi before calling. On NIST SD 302 prints, 1000 ppi images passed in
+unchanged gave under 10% of the examiner-marked minutiae (7 exemplars, 12 latents), against
+46% and 24% for the same prints at 500 ppi; shrinking 500 ppi images to 80% of their size
+lowered the share found from 41% to 31% (18 exemplars) and from 25% to 18% (30 latents).
+
 **Returns:**
 - A dictionary containing:
   - `minutiae`: Pandas DataFrame with minutiae information
