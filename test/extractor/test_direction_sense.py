@@ -74,7 +74,7 @@ class RefineMinutiaeDirectionTest(unittest.TestCase):
     def test_image_dpi_scales_the_filters(self):
         direction = np.radians(250)
 
-        for period, image_dpi in ((5.0, 250), (40.0, 1000)):
+        for period, image_dpi in ((4.0, 250), (40.0, 1000)):
             image = dislocation_image(direction, period=period, size=401)
             minutiae = np.array([[200., 200., direction + np.pi, 0.9, 0.]])
             refined, confidence = direction_sense.refine_minutiae_direction(

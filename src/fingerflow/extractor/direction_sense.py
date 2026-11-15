@@ -19,8 +19,8 @@ import cv2
 import numpy as np
 
 REFERENCE_DPI = 500.0
-RIDGE_PERIODS = (7.0, 9.0, 11.0, 13.0)  # px at 500 dpi
-WINDOW_SIGMA = 10.0  # px at 500 dpi
+RIDGE_PERIODS = (5.6, 7.2, 8.8, 10.4)  # px at 500 dpi
+WINDOW_SIGMA = 8.0  # px at 500 dpi
 ORIENTATION_SIGMA = 6.0  # px at 500 dpi
 CONTRAST_SIGMA = 8.0  # px at 500 dpi
 ORIENTATION_GUARD = np.radians(25)

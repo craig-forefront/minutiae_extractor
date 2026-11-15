@@ -47,7 +47,7 @@ class ExtractorDirectionTest(unittest.TestCase):
         self.assertAlmostEqual(minutiae['angle'][0], self.direction + np.pi)
 
     def test_image_dpi_is_passed_on(self):
-        image = dislocation_image(self.direction, period=5.0)
+        image = dislocation_image(self.direction, period=4.0)
         points = self.points
         minutiae = build_extractor(points, image_dpi=250).extract_minutiae(image)['minutiae']
         default = build_extractor(points).extract_minutiae(image)['minutiae']
