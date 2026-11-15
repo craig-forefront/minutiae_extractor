@@ -23,7 +23,15 @@ class MinutiaeNet:
                                 metrics=['accuracy'])
 
     # TODO : refactor - too long function
-    def extract_minutiae_points(self, image, original_image):  # pylint: disable=too-many-locals
+    def extract_minutiae_points(self, image, original_image, score_reweighting=None):  # pylint: disable=too-many-locals
+        # score_reweighting: None for the original behaviour, or a tuple
+        # (candidate_threshold, fine_net_weight, score_threshold). With the tuple, every
+        # CoarseNet cell above candidate_threshold becomes a candidate (the original
+        # behaviour takes cells above 0.5, lowered step by step only when fewer than five
+        # minutiae are found), the score is
+        # (1 - fine_net_weight) * CoarseNet + fine_net_weight * FineNet instead of
+        # (4 * CoarseNet + FineNet) / 5, and a candidate is kept if that score is at least
+        # score_threshold.
         # Generate OF
         texture_img = minutiae_net_utils.fast_enhance_texture(image, sigma=2.5, show=False)
         dir_map, _ = minutiae_net_utils.get_maps_stft(
@@ -50,6 +58,9 @@ class MinutiaeNet:
 
         # In cases of small amount of minutiae given, try adaptive threshold
         while final_minutiae_score_threashold >= 0:
+            if score_reweighting is not None:
+                early_minutiae_thres = score_reweighting[0]
+
             mnt = coarse_net_utils.label2mnt(
                 np.squeeze(mnt_s_out) *
                 np.round(
@@ -63,6 +74,10 @@ class MinutiaeNet:
             mnt_nms_2 = minutiae_net_utils.nms(mnt)
             # Make sure good result is given
             if mnt_nms_1.shape[0] > 4 and mnt_nms_2.shape[0] > 4:
+                break
+
+            # With re-weighting the candidate threshold is fixed, so there is one pass only
+            if score_reweighting is not None:
                 break
 
             final_minutiae_score_threashold = final_minutiae_score_threashold - 0.05
@@ -90,7 +105,11 @@ class MinutiaeNet:
                 is_minutiae_prob = is_minutiae_prob[0]
 
                 tmp_mnt = mnt_nms[idx_minu, :].copy()
-                tmp_mnt[3] = (4*tmp_mnt[3] + is_minutiae_prob) / 5
+                if score_reweighting is None:
+                    tmp_mnt[3] = (4*tmp_mnt[3] + is_minutiae_prob) / 5
+                else:
+                    fine_net_weight = score_reweighting[1]
+                    tmp_mnt[3] = (1 - fine_net_weight)*tmp_mnt[3] + fine_net_weight*is_minutiae_prob
                 mnt_refined.append(tmp_mnt)
 
             else:
@@ -99,8 +118,11 @@ class MinutiaeNet:
         mnt_nms = np.array(mnt_refined)
 
         if mnt_nms.shape[0] > 0:
-            mnt_nms = mnt_nms[mnt_nms[:, 3] >
-                              final_minutiae_score_threashold, :]
+            if score_reweighting is None:
+                mnt_nms = mnt_nms[mnt_nms[:, 3] >
+                                  final_minutiae_score_threashold, :]
+            else:
+                mnt_nms = mnt_nms[mnt_nms[:, 3] >= score_reweighting[2], :]
 
         coarse_net_model.fuse_minu_orientation(dir_map, mnt_nms, mode=3)
 

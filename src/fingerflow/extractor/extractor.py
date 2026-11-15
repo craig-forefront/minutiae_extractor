@@ -9,7 +9,9 @@ MIN_CROP_SIZE = 128
 
 class Extractor:
     def __init__(self, coarse_net_path, fine_net_path, classify_net_path, core_net_path,
-                 refine_direction=True, image_dpi=500, crop_to_print=False):
+                 refine_direction=True, image_dpi=500, crop_to_print=False,
+                 reweight_score=False, candidate_threshold=0.1, fine_net_weight=0.5,
+                 score_threshold=0.55):
         # refine_direction: take the direction sense of the minutiae from the ridge pattern
         # instead of the CoarseNet output, which is not stable. image_dpi is used only by
         # this step.
@@ -20,7 +22,23 @@ class Extractor:
         # print only (utils.find_print_box) and report the coordinates in the full image.
         # CoarseNet normalises its input with the mean and variance of the whole image, so
         # a large empty margin changes what it sees of the print.
+        #
+        # reweight_score: give the FineNet score more weight. Every CoarseNet cell above
+        # candidate_threshold becomes a candidate, the score of a minutia is
+        # (1 - fine_net_weight) * CoarseNet + fine_net_weight * FineNet, and minutiae with a
+        # score of at least score_threshold are returned. Without it the score is
+        # (4 * CoarseNet + FineNet) / 5 and the three numbers are not used.
+        for name, value in (('candidate_threshold', candidate_threshold),
+                            ('fine_net_weight', fine_net_weight),
+                            ('score_threshold', score_threshold)):
+            if isinstance(value, bool) or not isinstance(value, (int, float)) \
+                    or not 0 <= value <= 1:
+                raise ValueError(f'{name} has to be a number from 0 to 1, got {value}')
+
         self.__crop_to_print = bool(crop_to_print)
+        self.__score_reweighting = None
+        if reweight_score:
+            self.__score_reweighting = (candidate_threshold, fine_net_weight, score_threshold)
 
         self.__refine_direction = refine_direction
         self.__image_dpi = image_dpi
@@ -46,9 +64,15 @@ class Extractor:
 
         preprocessed_image = utils.preprocess_image_data(minutiae_image_data)
 
-        extracted_points = self.__extraction_module.extract_minutiae_points(
-            preprocessed_image['image'],
-            preprocessed_image['original_image'])
+        if self.__score_reweighting is None:
+            extracted_points = self.__extraction_module.extract_minutiae_points(
+                preprocessed_image['image'],
+                preprocessed_image['original_image'])
+        else:
+            extracted_points = self.__extraction_module.extract_minutiae_points(
+                preprocessed_image['image'],
+                preprocessed_image['original_image'],
+                score_reweighting=self.__score_reweighting)
 
         direction_confidence = None
         if self.__refine_direction:

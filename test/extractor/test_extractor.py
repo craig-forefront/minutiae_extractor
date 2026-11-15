@@ -146,3 +146,33 @@ class ExtractorCropToPrintTest(unittest.TestCase):
         self.assertEqual(seen['original_image'].shape, (480, 480))
         self.assertEqual((minutiae['x'][0], minutiae['y'][0]), self.minutia)
 
+
+class ExtractorScoreReweightingTest(unittest.TestCase):
+    def setUp(self):
+        self.image = dislocation_image(0.0)
+        self.points = np.array([[100., 100., 0., 0.9, 0.]])
+
+    def extraction_call(self, **kwargs):
+        extractor = build_extractor(self.points, **kwargs)
+        extraction_module = vars(extractor)['_Extractor__extraction_module']
+        extractor.extract_minutiae(self.image)
+
+        return extraction_module.extract_minutiae_points.call_args
+
+    def test_off_by_default(self):
+        self.assertEqual(self.extraction_call().kwargs, {})
+        self.assertEqual(self.extraction_call(candidate_threshold=0.2).kwargs, {})
+
+    def test_numbers_are_passed_on(self):
+        self.assertEqual(self.extraction_call(reweight_score=True).kwargs,
+                         {'score_reweighting': (0.1, 0.5, 0.55)})
+        self.assertEqual(
+            self.extraction_call(reweight_score=True, candidate_threshold=0.2,
+                                 fine_net_weight=0.25, score_threshold=0.4).kwargs,
+            {'score_reweighting': (0.2, 0.25, 0.4)})
+
+    def test_invalid_numbers(self):
+        for name in ('candidate_threshold', 'fine_net_weight', 'score_threshold'):
+            for value in (-0.1, 1.5, None, 'high', True):
+                with self.assertRaises(ValueError):
+                    build_extractor(self.points, **{name: value})
