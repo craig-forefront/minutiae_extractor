@@ -307,8 +307,8 @@ Extractor(coarse_net, fine_net, classify_net, core_net, refine_direction=True, i
 **Parameters:**
 - `coarse_net` (str): Path to the coarse network model
 - `fine_net` (str): Path to the fine network model
-- `classify_net` (str): Path to the classification network model
-- `core_net` (str): Path to the core detection network model
+- `classify_net` (str or `None`): Path to the classification network model. With `None` the minutiae are not classified: the `class` column is `NaN`, everything else in the result is unchanged, and the time for one network call per minutia is saved
+- `core_net` (str or `None`): Path to the core detection network model. With `None` no cores are detected and `core` in the result is `None`
 - `refine_direction` (bool): Take the direction sense of the minutiae from the image instead of from CoarseNet (default `True`)
 - `image_dpi` (float): Resolution of the input images, used by the direction step only (default `500`)
 - `crop_to_print` (bool): Run the minutiae steps on the part of the image that holds the print and report coordinates in the full image (default `False`; see Finding more minutiae)

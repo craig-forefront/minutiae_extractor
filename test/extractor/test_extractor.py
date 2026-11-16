@@ -176,3 +176,49 @@ class ExtractorScoreReweightingTest(unittest.TestCase):
             for value in (-0.1, 1.5, None, 'high', True):
                 with self.assertRaises(ValueError):
                     build_extractor(self.points, **{name: value})
+
+
+class ExtractorOptionalNetworksTest(unittest.TestCase):
+    """ClassifyNet and CoreNet are optional: a path of None leaves the network out."""
+
+    def setUp(self):
+        self.direction = np.radians(40)
+        self.image = dislocation_image(self.direction)
+        self.points = np.array([[100., 100., self.direction + np.pi, 0.9, 0.]])
+
+    def build(self, points, classify_net_path, core_net_path):
+        with mock.patch.object(extractor_module, 'MinutiaeNet') as minutiae_net, \
+                mock.patch.object(extractor_module, 'ClassifyNet') as self.classify_net, \
+                mock.patch.object(extractor_module, 'CoreNet') as self.core_net:
+            minutiae_net.return_value.extract_minutiae_points.return_value = points
+            self.classify_net.return_value.classify_minutiae_points.side_effect = \
+                lambda _image, extracted: pd.DataFrame(np.array(extracted), columns=COLUMNS)
+            self.core_net.return_value.detect_fingerprint_core.return_value = 'cores'
+
+            return extractor_module.Extractor('a', 'b', classify_net_path, core_net_path)
+
+    def test_without_classify_net_the_class_is_nan(self):
+        result = self.build(self.points, None, 'd').extract_minutiae(self.image)
+        with_classes = build_extractor(self.points).extract_minutiae(self.image)['minutiae']
+        minutiae = result['minutiae']
+
+        self.classify_net.assert_not_called()
+        self.assertEqual(list(minutiae.columns), COLUMNS + ['direction_confidence'])
+        self.assertTrue(np.isnan(minutiae['class'][0]))
+        # Everything else is what the extractor returns with ClassifyNet
+        others = [c for c in minutiae.columns if c != 'class']
+        pd.testing.assert_frame_equal(minutiae[others], with_classes[others])
+        self.assertEqual(result['core'], 'cores')
+
+    def test_without_classify_net_and_without_minutiae(self):
+        minutiae = self.build(np.array([]), None, 'd').extract_minutiae(self.image)['minutiae']
+
+        self.assertEqual(len(minutiae), 0)
+        self.assertEqual(list(minutiae.columns), COLUMNS + ['direction_confidence'])
+
+    def test_without_core_net_the_core_is_none(self):
+        result = self.build(self.points, 'c', None).extract_minutiae(self.image)
+
+        self.core_net.assert_not_called()
+        self.assertIsNone(result['core'])
+        self.assertEqual(result['minutiae']['class'][0], 0.)

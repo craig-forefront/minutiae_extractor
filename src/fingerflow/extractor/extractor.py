@@ -1,3 +1,6 @@
+import numpy as np
+import pandas as pd
+
 from .minutiae_net import MinutiaeNet
 from .classify_net import ClassifyNet
 from .core_net import CoreNet
@@ -5,6 +8,19 @@ from . import direction_sense, utils
 
 # Smallest side, in px, of a print box that crop_to_print will crop to
 MIN_CROP_SIZE = 128
+
+
+def unclassified_minutiae_points(extracted_points):
+    """The table that ClassifyNet returns, with NaN as the class of every minutia."""
+    columns = ['x', 'y', 'angle', 'score', 'class']
+    points = np.asarray(extracted_points, dtype=float)
+    if points.size == 0:
+        return pd.DataFrame([], columns=columns)
+
+    table = pd.DataFrame(points[:, :4], columns=columns[:4])
+    table['class'] = np.nan
+
+    return table
 
 
 class Extractor:
@@ -43,8 +59,15 @@ class Extractor:
         self.__refine_direction = refine_direction
         self.__image_dpi = image_dpi
         self.__extraction_module = MinutiaeNet(coarse_net_path, fine_net_path)
-        self.__classification_module = ClassifyNet(classify_net_path)
-        self.__core_detection_module = CoreNet(core_net_path)
+        # classify_net_path=None: the minutiae are not classified, their class is NaN.
+        # core_net_path=None: no core detection, 'core' in the result is None.
+        # Both networks only add to the result, the minutiae are the same without them.
+        self.__classification_module = None
+        if classify_net_path is not None:
+            self.__classification_module = ClassifyNet(classify_net_path)
+        self.__core_detection_module = None
+        if core_net_path is not None:
+            self.__core_detection_module = CoreNet(core_net_path)
 
     def extract_minutiae(self, image_data):
         image_data = utils.normalize_image_data(image_data)
@@ -79,9 +102,12 @@ class Extractor:
             extracted_points, direction_confidence = direction_sense.refine_minutiae_direction(
                 preprocessed_image['original_image'], extracted_points, self.__image_dpi)
 
-        classified_points = self.__classification_module.classify_minutiae_points(
-            preprocessed_image['original_image'],
-            extracted_points)
+        if self.__classification_module is not None:
+            classified_points = self.__classification_module.classify_minutiae_points(
+                preprocessed_image['original_image'],
+                extracted_points)
+        else:
+            classified_points = unclassified_minutiae_points(extracted_points)
 
         if direction_confidence is not None:
             classified_points['direction_confidence'] = direction_confidence
@@ -90,6 +116,8 @@ class Extractor:
             classified_points['x'] = classified_points['x'] + x_offset
             classified_points['y'] = classified_points['y'] + y_offset
 
-        core_coordinates = self.__core_detection_module.detect_fingerprint_core(image_data)
+        core_coordinates = None
+        if self.__core_detection_module is not None:
+            core_coordinates = self.__core_detection_module.detect_fingerprint_core(image_data)
 
         return {'core': core_coordinates, 'minutiae': classified_points}
