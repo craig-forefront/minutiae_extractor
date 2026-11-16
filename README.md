@@ -223,13 +223,16 @@ the same prints is known more precisely:
 
 What this shows:
 
-- Each option helps against the default, and together they find about a fifth more of the
-  marked minutiae (42.2% to 50.3%) with fewer unmarked detections.
-- The re-weighting buys its extra minutiae at about the precision that cropping alone
-  reaches: at 0.55 it may cost a little against cropping alone (-0.7 points, the range
-  includes zero), at 0.575 it costs nothing and still finds 3.6 points more.
-- Neither option changes how often the direction sense agrees with the examiner (changes
-  between -0.3 and +0.2 points, all ranges include zero) or makes the position worse (mean
+- Cropping helps on both counts, and both options together find about a fifth more of the
+  marked minutiae than the default (42.2% to 50.3%) with fewer unmarked detections.
+- The re-weighting finds more of the marked minutiae on every group of prints looked at
+  (about 5 to 8 points). What it does to the precision depends on the capture device, as
+  the next table shows: on these 130 prints as a whole it costs little against cropping
+  alone at 0.55 (-0.7 points, the range includes zero) and nothing at 0.575, but on one
+  of the devices it costs about 3 points at 0.55.
+- The options hardly change how often the direction sense agrees with the examiner
+  (changes between -0.3 and +0.2 points on the 130 prints, all ranges include zero; see
+  the further prints below for a small loss) and do not make the position worse (mean
   distance to the mark 4.14 px by default, 4.01 px with both).
 - No print came back empty with any setting.
 - Cropping does nothing for the slap images, which have no margin. With both options the
@@ -242,6 +245,35 @@ What this shows:
   so the times are rough): 454 s in total by default, 230 s with `crop_to_print`, 517 s
   with `reweight_score`, 336 s with both.
 
+The effect of the re-weighting on precision differs between capture devices. The table
+splits the rolled prints of the 130 by the device code of the collection (C, U, V) and
+adds 18 further rolled prints of 18 subjects that were measured afterwards as an
+independent check (the last two rows; 12 of these subjects appear nowhere in the 130
+prints or in the 40 used to choose the settings). Changes are in percentage points of
+"reported that are marked", with the same 95% intervals as above. The split by device was
+made after the results were seen, so it describes these prints and is not a tested
+prediction.
+
+| Rolled prints | Cropping alone | Both | Both, 0.575 | Cropping to both | Cropping to both, 0.575 | Default to `reweight_score` |
+|---|---|---|---|---|---|---|
+| Device C, 50 prints, 28 subjects | 81.6% | 82.8% | 84.2% | +1.2 (+0.1 to +2.5) | +2.6 (+1.6 to +3.9) | +4.3 (+3.2 to +5.7) |
+| Device U, 18 prints, 18 subjects | 85.2% | 84.5% | 85.6% | -0.7 (-2.5 to +1.1) | +0.5 (-1.4 to +2.3) | +1.1 (-1.5 to +3.5) |
+| Device V, 45 prints, 45 subjects | 83.0% | 80.2% | 82.5% | -2.8 (-4.8 to -1.2) | -0.5 (-2.2 to +0.9) | -1.7 (-3.9 to +0.2) |
+| Further prints, device U, 6 prints | 83.9% | 83.6% | 83.8% | -0.3 (-2.4 to +1.8) | -0.1 (-2.2 to +1.8) | +5.7 (+1.8 to +9.8) |
+| Further prints, device V, 12 prints | 83.8% | 79.6% | 81.4% | -4.2 (-6.0 to -2.4) | -2.4 (-3.5 to -1.1) | -3.2 (-5.5 to -0.9) |
+
+On device V the re-weighting lowers the precision that cropping reaches by about 3 to 4
+points at 0.55, and on the 12 further prints by 2.4 points even at 0.575; on device C it
+raises it. In every row the share of marked minutiae found rises by 5.5 to 8.4 points at
+0.55 and by 3.1 to 6.4 points at 0.575, and both options together stay ahead of the default
+on both counts (precision +2.7 to +10.3 points). On the 18 further prints the direction
+sense agreed with the examiner slightly less often with both options than with cropping
+alone: 95.4% against 96.7%, a change of -1.3 points (-2.1 to -0.5), where the 130 prints
+show -0.2 (-0.6 to +0.1). The further prints were run through the unmodified package.
+With all 148 prints taken together (72 subjects, 16,207 marked minutiae), cropping to both
+changes precision by -1.0 points (-2.0 to -0.1) and the share found by +5.9 (+5.1 to
++6.7); with 0.575 the changes are +0.7 (-0.2 to +1.5) and +3.9 (+3.2 to +4.6).
+
 For preparing rolled and slap prints as training data, switch both options on:
 
 ```python
@@ -250,9 +282,14 @@ extractor = Extractor("coarse_net", "fine_net", "classify_net", "core_net",
 ```
 
 Keep `score_threshold` at 0.55 to get the most minutiae; keep only the rows with a `score`
-of at least 0.575 if detections without a mark matter more. These figures come from one
-collection, so before a large run check a sample of your own images with and without the
-options, at least by looking at the minutiae drawn on the prints.
+of at least 0.575 if detections without a mark matter more. Do not take 0.575 as a value
+that keeps the precision of cropping alone on every sensor: it did on the 130 prints as a
+whole and did not on device V in the further prints. If unmarked detections matter most,
+note that on devices U and V cropping alone was as precise as both options or more so. These
+figures come from one collection, so before a large run check a sample of your own images
+from each sensor type with and without the options, at least by looking at the minutiae
+drawn on the prints, and choose `score_threshold` again if you have marked minutiae to
+compare with.
 
 Limits of this evidence: all marks come from one examiner; some unmarked detections are
 real minutiae the examiner did not mark, so the precision figures are lower bounds; the
@@ -264,7 +301,8 @@ over the three option settings); the prints come from five capture devices of on
 sensors, on latent prints, on the minutia type and on a matcher or a network trained from
 these minutiae was not measured. Images with several fingers were not available: the box encloses every
 textured region of at least a tenth of the largest one, which is covered by a synthetic
-test only. On latent prints cut close to the print, cropping has nothing to remove.
+test only. The slap figures rest on 17 prints: the collection has only 33 marked slap
+images, so no further slap sample was available for the independent check. On latent prints cut close to the print, cropping has nothing to remove.
 
 #### Core DataFrame
 
@@ -307,7 +345,7 @@ Extractor(coarse_net, fine_net, classify_net, core_net, refine_direction=True, i
 **Parameters:**
 - `coarse_net` (str): Path to the coarse network model
 - `fine_net` (str): Path to the fine network model
-- `classify_net` (str or `None`): Path to the classification network model. With `None` the minutiae are not classified: the `class` column is `NaN`, everything else in the result is unchanged, and the time for one network call per minutia is saved
+- `classify_net` (str or `None`): Path to the classification network model. With `None` the minutiae are not classified: the `class` column is `NaN`, everything else in the result is computed as before, and the time for one network call per minutia is saved
 - `core_net` (str or `None`): Path to the core detection network model. With `None` no cores are detected and `core` in the result is `None`
 - `refine_direction` (bool): Take the direction sense of the minutiae from the image instead of from CoarseNet (default `True`)
 - `image_dpi` (float): Resolution of the input images, used by the direction step only (default `500`)
