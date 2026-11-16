@@ -80,3 +80,38 @@ def resize_minutiae_patch(minutiae_patch):
     minutiae_patch = np.expand_dims(minutiae_patch, axis=0)
 
     return minutiae_patch
+
+
+def find_print_box(gray_image, margin=16):
+    """Bounding box (x0, y0, x1, y1) of the print in an 8-bit grayscale image.
+
+    The print is taken to be where the image has texture: the standard deviation of the
+    gray values in a 16 x 16 px neighbourhood is above 12. Small specks are removed, and
+    the box encloses the largest textured region and every other region of at least a
+    tenth of its area (so that several fingers in one image are all kept), widened by
+    `margin` px and clipped to the image. x1 and y1 are exclusive, so the print is
+    gray_image[y0:y1, x0:x1]. If no textured region is found the box is the whole image.
+    """
+    height, width = gray_image.shape[:2]
+    values = gray_image.astype(np.float32)
+    mean = cv2.blur(values, (16, 16))
+    deviation = np.sqrt(np.maximum(cv2.blur(values * values, (16, 16)) - mean * mean, 0))
+
+    textured = (deviation > 12).astype(np.uint8)
+    textured = cv2.morphologyEx(textured, cv2.MORPH_OPEN, np.ones((9, 9), np.uint8))
+
+    count, _, stats, _ = cv2.connectedComponentsWithStats(textured)
+    if count < 2:
+        return 0, 0, width, height
+
+    # Row 0 of stats is the background
+    regions = stats[1:]
+    regions = regions[regions[:, cv2.CC_STAT_AREA] >= 0.1 * regions[:, cv2.CC_STAT_AREA].max()]
+
+    x_start = int(regions[:, cv2.CC_STAT_LEFT].min())
+    y_start = int(regions[:, cv2.CC_STAT_TOP].min())
+    x_end = int((regions[:, cv2.CC_STAT_LEFT] + regions[:, cv2.CC_STAT_WIDTH]).max())
+    y_end = int((regions[:, cv2.CC_STAT_TOP] + regions[:, cv2.CC_STAT_HEIGHT]).max())
+
+    return (max(x_start - margin, 0), max(y_start - margin, 0),
+            min(x_end + margin, width), min(y_end + margin, height))

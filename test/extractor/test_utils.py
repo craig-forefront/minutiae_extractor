@@ -245,3 +245,58 @@ class ResizeMinutiaePatchtest(unittest.TestCase):
         result_output_patch = utils.resize_minutiae_patch(mock_input_data)
 
         np.testing.assert_array_equal(result_output_patch, mock_output_patch)
+
+
+class FindPrintBoxTest(unittest.TestCase):
+    @staticmethod
+    def textured(height, width):
+        """Stripes with a 10 px period, like ridges."""
+        return np.tile((127 + 100 * np.sin(np.arange(width) * 2 * np.pi / 10)).astype(np.uint8),
+                       (height, 1))
+
+    def assert_box_close(self, box, expected, tolerance=8):
+        for value, expected_value in zip(box, expected):
+            self.assertLessEqual(abs(value - expected_value), tolerance)
+
+    def test_print_on_white_background(self):
+        image = np.full((600, 500), 255, dtype=np.uint8)
+        image[200:400, 150:350] = self.textured(200, 200)
+
+        self.assert_box_close(utils.find_print_box(image), (134, 184, 366, 416))
+        self.assert_box_close(utils.find_print_box(image, margin=0), (150, 200, 350, 400))
+
+    def test_box_contains_the_print_and_is_clipped_to_the_image(self):
+        image = np.full((300, 300), 255, dtype=np.uint8)
+        image[:150, 100:] = self.textured(150, 200)
+        x_start, y_start, x_end, y_end = utils.find_print_box(image)
+
+        self.assertEqual((y_start, x_end), (0, 300))
+        self.assertLessEqual(x_start, 100)
+        self.assertGreaterEqual(y_end, 150)
+
+    def test_blank_image_gives_the_whole_image(self):
+        self.assertEqual(utils.find_print_box(np.full((300, 200), 255, dtype=np.uint8)),
+                         (0, 0, 200, 300))
+
+    def test_print_filling_the_image_gives_the_whole_image(self):
+        self.assertEqual(utils.find_print_box(self.textured(300, 200)), (0, 0, 200, 300))
+
+    def test_several_prints_are_all_kept(self):
+        image = np.full((400, 900), 255, dtype=np.uint8)
+        image[100:300, 100:250] = self.textured(200, 150)
+        image[120:280, 600:750] = self.textured(160, 150)
+
+        self.assert_box_close(utils.find_print_box(image), (84, 84, 766, 316))
+
+    def test_small_mark_far_from_the_print_is_ignored(self):
+        image = np.full((400, 900), 255, dtype=np.uint8)
+        image[100:300, 100:250] = self.textured(200, 150)
+        image[150:180, 700:730] = self.textured(30, 30)
+
+        self.assert_box_close(utils.find_print_box(image), (84, 84, 266, 316))
+
+    def test_dark_background(self):
+        image = np.zeros((600, 500), dtype=np.uint8)
+        image[200:400, 150:350] = self.textured(200, 200)
+
+        self.assert_box_close(utils.find_print_box(image), (134, 184, 366, 416))
