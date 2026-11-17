@@ -140,3 +140,7 @@ data
 minutiae_patches
 
 .pylintrc
+# written by the steps of AIR_GAPPED_DEPLOYMENT_GUIDE.md
+requirements-locked.txt
+# written by the reader in the quick start of README.md
+quickstart.py

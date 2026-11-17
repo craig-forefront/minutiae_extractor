@@ -1,416 +1,277 @@
 # Minutiae Extractor
-This patch updates and fixes issues in the legacy version of **MinutiaeNet** and **FingerFlow** improving compatibility with newer dependencies and ensuring smoother model loading, inference, and fingerprint preprocessing. It preserves the original architecture and training logic while resolving broken imports and outdated function calls.
 
-![Detection Results](https://github.com/tourmii/minutiae_extractor/blob/main/assets/result.png)
+This repository finds the minutiae of a fingerprint image: the points where a ridge ends
+or splits, each with a position and a direction. It is a port of MinutiaeNet (the networks
+CoarseNet and FineNet) to Keras 3 and TensorFlow, together with ClassifyNet (minutia type)
+and CoreNet (core detection) from the FingerFlow project. Its Python package is named
+`fingerflow`.
 
-## Features
+It is a fork of [tourmii/minutiae_extractor](https://github.com/tourmii/minutiae_extractor).
+The fork adds a correction of the minutia direction (`direction_confidence` column), two
+opt-in options that find more minutiae (`crop_to_print`, `reweight_score`), the choice to
+leave out ClassifyNet and CoreNet, and fixes to the patch location and image handling.
+The upstream repository has none of this, and neither has the `fingerflow` package on
+PyPI, which is the original FingerFlow release. Do not `pip install fingerflow`; install
+from this repository as described below.
 
-- **Minutiae Detection**: Extract minutiae points from fingerprint images with high accuracy
-- **Minutiae Classification**: Classify minutiae into 6 types:
-  - Ending
-  - Bifurcation
-  - Fragment
-  - Enclosure
-  - Crossbar
-  - Other
-- **Core Detection**: Detect and localize fingerprint core regions
-- **Easy Integration**: Simple API for seamless integration into your projects
+![Minutiae found on the sample image, drawn as red dots with their direction](assets/result.png)
 
-### Minutiae Patches Examples
+*The sample image of this repository with the minutiae the default settings return.*
 
-FingerFlow extracts detailed minutiae patches with precise location and orientation information:
+## Where this fits
 
-![Minutiae Patches](https://github.com/tourmii/minutiae_extractor/blob/main/assets/patches.png)
+The main use here is to prepare minutiae for training DeepPrint, a network that turns a
+fingerprint into a fixed-length vector. That work is spread over two repositories:
 
-## Requirements
+| Step | Where |
+|---|---|
+| 1. Collect the images and their resolution | [fixed-length-fingerprint-extractors](https://github.com/craig-forefront/fixed-length-fingerprint-extractors) (the "DeepPrint repository") |
+| 2. Resample to 500 ppi, invert light-ridge images | DeepPrint repository, done by its `scripts/extract_minutiae.py` |
+| 3. Find the minutiae | **this repository**, called by that same script |
+| 4. Train DeepPrint, compute embeddings | DeepPrint repository |
 
-- Python >= 3.11
-- uv (recommended) or pip for package management
+If you came here from the DeepPrint guides, you need three things from this repository:
+a clone of `main` (commit `420b6e5` or later), the two model files `CoarseNet.h5` and
+`FineNet.h5`, and the package importable as `fingerflow`. Follow
+[Installation](#installation), check it with the [quick start](#quick-start), then go back
+to the DeepPrint guide that sent you here. You do not call the `Extractor` yourself.
+
+## Input images
+
+Read this before the first run; the output is of little use otherwise.
+
+- **500 ppi** (pixels per inch). The networks work at this one scale and nothing in this
+  package rescales the image. Resample images of any other resolution first. Prints at
+  1000 ppi passed in unchanged gave under 10% of the minutiae an examiner had marked.
+- **8-bit** (`uint8`) grayscale, BGR or BGRA array, as `cv2.imread` returns it.
+- **Dark ridges on a light background.**
+
+How to resample and invert is in [docs/usage.md](docs/usage.md#preparing-the-image). The
+DeepPrint script of step 2 above does both for you.
 
 ## Installation
 
-### Step 1: Install Models
-
-Before installing the package, you need to download the pre-trained models from Hugging Face:
-
-```bash
-python scripts/install_model.py
-```
-
-This will download the MinutiaeNet models to the `models/` directory.
-
-### Step 2: Set Up Environment with uv
-
-We recommend using [uv](https://docs.astral.sh/uv/) for fast and reliable Python package management.
-
-#### Install uv (if not already installed)
+Tested on Linux x86_64 with [uv](https://docs.astral.sh/uv/) 0.11 and Python 3.13 (Python
+3.11 or later is required). Other platforms were not tried.
 
 ```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-
-#### Install FingerFlow
-
-```bash
-git clone https://github.com/tourmii/minutiae_extractor
+git clone https://github.com/craig-forefront/minutiae_extractor
 cd minutiae_extractor
 
-uv sync
+uv sync                                  # creates .venv and installs the dependencies
+uv pip install -e .                      # makes the package importable as "fingerflow"
+uv run python scripts/install_model.py   # downloads the model weights into models/
 ```
 
-Alternatively, if you prefer using pip:
+If `uv` is not installed: `curl -LsSf https://astral.sh/uv/install.sh | sh` puts it into
+`~/.local/bin` (this installer command was not run for this document; uv was already
+present).
 
-```bash
-pip install -r requirements.txt
-```
+What to expect:
 
-## Usage
+- `uv sync` installs the exact versions recorded in `uv.lock` (TensorFlow 2.20.0). It
+  reported 109 packages installed here; `uv.lock` lists 114, some of them for other
+  platforms. The `.venv` directory was 6.4 GB here. 3.9 GB of that are NVIDIA GPU libraries,
+  which are installed on a machine without a GPU as well.
+- `uv sync` does **not** install the `fingerflow` package itself; the next line does. If
+  you run `uv sync` again later, it removes the package again: repeat
+  `uv pip install -e .`.
+- `scripts/install_model.py` downloads the four weight files (1.6 GB), and a small
+  `README.md` with them, from the model repository
+  [tourmaline05/MinutiaeNet](https://huggingface.co/tourmaline05/MinutiaeNet) on Hugging
+  Face. Check them:
 
-### Basic Example
+  ```bash
+  ls -l models
+  ```
+
+  | File | Size | Network | Needed for |
+  |---|---|---|---|
+  | `CoarseNet.h5` | 81 MB | proposes minutiae | always |
+  | `FineNet.h5` | 654 MB | scores each proposed minutia | always |
+  | `ClassifyNet_6_classes.h5` | 619 MB | minutia type | only for the `class` column |
+  | `CoreNet.weights` | 256 MB | core detection | only for the `core` result |
+
+  `models/` is listed in `.gitignore`; the weights are not part of the repository.
+
+Run Python through `uv run python ...` from the repository directory, or activate the
+environment once per shell with `source .venv/bin/activate`.
+
+For a machine without internet access see
+[AIR_GAPPED_DEPLOYMENT_GUIDE.md](AIR_GAPPED_DEPLOYMENT_GUIDE.md).
+
+## Quick start
+
+Save this as `quickstart.py` in the repository directory (`.gitignore` lists that file
+name, so git does not report it):
 
 ```python
 import cv2
-import numpy as np
 from fingerflow.extractor import Extractor
 
-extractor = Extractor("coarse_net", "fine_net", "classify_net", "core_net")
+extractor = Extractor("models/CoarseNet.h5", "models/FineNet.h5",
+                      "models/ClassifyNet_6_classes.h5", "models/CoreNet.weights")
 
-image = cv2.imread("path/to/your/fingerprint.png")
+image = cv2.imread("sample/sample_fingerprint.tif")
+result = extractor.extract_minutiae(image)
 
-extracted_minutiae = extractor.extract_minutiae(image)
+minutiae = result["minutiae"]
+print(len(minutiae), "minutiae")
+print(minutiae.head())
+print(result["core"])
 ```
 
-### Detection Pipeline
+```bash
+uv run python quickstart.py
+```
 
-The extraction process includes multiple stages:
+After many TensorFlow log lines (including a message that no CUDA device was found, on a
+machine without a GPU) it prints, for the sample image:
 
-![Detection Pipeline](https://github.com/tourmii/minutiae_extractor/blob/main/assets/minutiae_extract.png)
+```
+51 minutiae
+       x      y     angle     score  class  direction_confidence
+0  121.0  149.0  6.239221  0.998402    1.0              0.695495
+1  169.0  382.0  1.752636  0.998863    0.0              0.665957
+2  177.0  334.0  1.507795  0.998872    0.0              1.057563
+3  217.0  310.0  1.286846  0.997997    1.0              0.920657
+4  124.0  285.0  1.837194  0.995029    1.0              0.565101
+    x1   y1   x2   y2     score   w    h
+0  121  236  164  374  0.966214  43  138
+```
 
-1. **Original Detection**: Initial minutiae detection identifies all potential points
-2. **Otsu Thresholding**: Image segmentation to isolate fingerprint region
-3. **Filtered Result**: Final minutiae with accurate orientations and classifications
+The whole run took a little over a minute on 4 CPU cores and no GPU.
 
-### Working with Results
+**With two networks only.** ClassifyNet and CoreNet are optional. This is what the
+DeepPrint script uses, and it is faster:
 
-The `extract_minutiae` method returns an object containing:
-
-#### Minutiae DataFrame
-
-A Pandas DataFrame with extracted and classified minutiae points:
-
-| Column | Description |
-|--------|-------------|
-| `x` | X coordinate of the minutiae point |
-| `y` | Y coordinate of the minutiae point |
-| `angle` | Direction of the minutia in radians (0 to 2π), in image axes: the direction vector is `(cos(angle), sin(angle))` with y pointing down. It points back along the ridge for an ending and into the valley between the two branches for a bifurcation (ISO 19794-2 convention) |
-| `score` | Extraction confidence score (0-1). By default it is `(4 * CoarseNet + FineNet) / 5`; with `reweight_score=True` it is a different mix of the two network scores and is not comparable with a default score (see Finding more minutiae) |
-| `class` | Minutiae type as a numeric code: `0` ending, `1` bifurcation, `2` fragment, `3` enclosure, `4` crossbar, `5` other |
-| `direction_confidence` | Confidence of the direction sense, typically 0-1 and occasionally higher. On real test prints the sense was right for 95-99% of minutiae at 0.25 and above, and much less often below that (see Direction sense). Present only when `refine_direction` is on |
-
-Example:
 ```python
-minutiae_df = extracted_minutiae['minutiae']
-print(f"Found {len(minutiae_df)} minutiae points")
-
-high_confidence = minutiae_df[minutiae_df['score'] > 0.8]
-
-endings = minutiae_df[minutiae_df['class'] == 0]
-bifurcations = minutiae_df[minutiae_df['class'] == 1]
+extractor = Extractor("models/CoarseNet.h5", "models/FineNet.h5", None, None)
 ```
 
-##### Direction sense
+The `class` column is then `NaN` and `result["core"]` is `None`.
 
-The ridge orientation that CoarseNet reports for a minutia is reliable, but which of the two
-opposite directions it reports is not: with the released weights it changes for roughly a
-quarter to a half of the minutiae when the image is shifted by a few pixels or rotated. By
-default the extractor therefore takes the sense from the ridge pattern in the image
-(`refine_direction=True`). The pattern has one more ridge on one side of a minutia than on
-the other, and the direction points to that side. Where the CoarseNet orientation differs by
-more than 15 degrees from the orientation measured in the image, the measured one is used.
+The notebook [demo.ipynb](demo.ipynb) does the same and draws the minutiae on the image.
 
-`image_dpi` sets the scale of this step: pass the resolution of the image. What matters is
-the ridge period in pixels. The default of 500 suits ordinary 500 ppi prints, whose ridges
-are about 8 to 11 px apart; for other images a suitable value is roughly
-`500 * period_px / 9.5`. The setting is tolerant: on the exemplar prints described below,
-values from 450 to 600 gave 96%, 400 and 650 gave 95%, and at 800 it fell to 87%.
+## Output
 
-Measured against examiner-marked minutiae from NIST SD 302, at 500 ppi (native or
-downsampled from 1000 ppi), counting detected minutiae that have an examiner mark within
-10 px:
+`extract_minutiae` returns a dictionary with two entries.
 
-| | Sense agrees with the examiner | CoarseNet | Reverses under a small crop or 180 degree rotation | CoarseNet |
-|---|---|---|---|---|
-| Rolled and slap exemplars (259 prints, 119 subjects, 11,577 minutiae) | 96.6% | 68.6% | 4.0% | 31% |
-| Latents (325 prints, 118 subjects, 1,863 minutiae) | 91.8% | 59.3% | 6.0% | 43% |
+`result["minutiae"]` is a pandas DataFrame with one row per minutia:
 
-Some of these pairings are chance matches (about 6% on exemplars, 9% on latents), so the
-true agreement is a little higher. On synthetic (SFinGe) prints the step is right for
-about 98%.
+| Column | Meaning |
+|---|---|
+| `x`, `y` | Position in px: `x` is the column, `y` the row (pointing down) |
+| `angle` | Direction in radians, 0 to 2π; the direction vector is `(cos(angle), sin(angle))` |
+| `score` | Confidence of the detection, 0 to 1. Its meaning changes with `reweight_score` |
+| `class` | Minutia type: `0` ending, `1` bifurcation, `2` fragment, `3` enclosure, `4` crossbar, `5` other. `NaN` without ClassifyNet |
+| `direction_confidence` | How clear the direction was; 0.25 or more is reliable. Absent with `refine_direction=False` |
 
-`direction_confidence` tells how clear the pattern was. A value of at least 0.25 is reached
-by 92% of these minutiae on exemplars and 88% on latents, and the sense is then right for
-99% and 95%; below 0.25 it is much less reliable, and below 0.1 no better than CoarseNet.
+`result["core"]` is a DataFrame with the columns `x1`, `y1`, `x2`, `y2`, `score`, `w`, `h`
+(one row per detected core box), or `None` without CoreNet. Check for `None` before you
+use it:
 
-Limits of this evidence: all marks come from one examiner; the filter sizes and the
-15 degree threshold were chosen on half of the exemplar subjects, so the exemplar figures
-are slightly optimistic (the latents were not used for the choice); and the figures cover
-only minutiae the extractor finds. It finds about 41% of the marked minutiae on exemplars
-(76% of its detections have a mark) and 29% on latents (64%), where it returns a median of
-7 minutiae per print (two options that find more are described under Finding more
-minutiae). Pass `refine_direction=False` to get the CoarseNet direction unchanged.
+```python
+cores = result["core"]
+if cores is not None and len(cores) > 0:
+    best = cores.loc[cores["score"].idxmax()]
+    print(f"Core box from ({best['x1']}, {best['y1']}) to ({best['x2']}, {best['y2']})")
+```
 
-##### Finding more minutiae
+The full description of every column is in [docs/usage.md](docs/usage.md#reference).
 
-With the released weights the extractor finds well under half of the minutiae that a
-fingerprint examiner marks, and about a quarter of what it reports has no examiner mark
-nearby. Two options of the `Extractor` constructor improve on this. Both are off by
-default, so the default output is what it was before they existed.
+## Options at a glance
 
-`crop_to_print=True` runs the minutiae steps on the part of the image that holds the print
-and reports `x` and `y` in the full image, as usual. CoarseNet (the network that proposes
-minutiae) scales its input by the mean and variance of the whole image, so a large empty
-margin, as rolled prints on a card have, changes what it sees of the print. The print is
-taken to be where the image has texture; the box around it is widened by 16 px. On the
-1,708 NIST SD 302 exemplar records at 500 ppi none of the 191,610 examiner-marked minutiae
-fell outside the box, which kept about half of the image area (median 48%). The core
-detection still uses the whole image.
+All are arguments of `Extractor(...)`; each links to its explanation.
 
-`reweight_score=True` gives more say to FineNet, the network that looks at the image patch
-around a proposed minutia. By default a minutia needs a CoarseNet score above 0.5 and
-FineNet can hardly change the outcome. With the option, every CoarseNet cell scoring above
-`candidate_threshold` (0.1) becomes a candidate, its score is
-`(1 - fine_net_weight) * CoarseNet + fine_net_weight * FineNet` (weight 0.5), and candidates
-scoring at least `score_threshold` (0.55) are returned. Two things change with it:
-
-- **The `score` column means something else.** By default it is
-  `(4 * CoarseNet + FineNet) / 5` and lies above 0.45 (lower only where fewer than five
-  minutiae were found); with the option it is the mix above and lies at or above
-  `score_threshold`. Scores from the two modes cannot be compared, and a threshold that
-  later code applies to `score` has to be chosen again.
-- The default lowers its threshold step by step when it finds fewer than five minutiae.
-  The option does not, so an image can come back with no minutiae.
-
-Raising `score_threshold` gives the same result as dropping the rows with a lower `score`
-afterwards, so the stricter setting in the table needs no second run.
-
-Measured on NIST SD 302 rolled and slap exemplars at 500 ppi against the minutiae marked by
-an examiner. A detected minutia counts as right if it can be paired one-to-one with a mark
-within 10 px. "Reported that are marked" is the share of detected minutiae with such a
-mark (precision), "marked that are found" the share of marks with a detection (recall).
-The subjects were split in two halves. The settings of `reweight_score` were chosen on 40
-prints of one half (32 subjects); all figures below are from the other half: 130 prints
-(113 rolled, 17 slap) of 60 subjects with 14,202 marked minutiae. The ranges are 95%
-intervals from resampling the subjects 2,000 times.
-
-| Options | Reported that are marked | Marked that are found | Direction sense agrees | Mean distance to the mark |
-|---|---|---|---|---|
-| none (default) | 76.8% (73.6 to 79.4) | 42.2% (38.8 to 45.1) | 96.8% | 4.14 px |
-| `crop_to_print` | 82.4% (79.9 to 84.7) | 44.7% (41.3 to 47.6) | 97.0% | 4.00 px |
-| `reweight_score` | 78.0% (74.4 to 81.0) | 48.0% (45.1 to 50.5) | 96.5% | 4.12 px |
-| both | 81.7% (78.6 to 84.3) | 50.3% (47.3 to 53.0) | 96.8% | 4.01 px |
-| both, `score_threshold=0.575` | 83.4% (80.5 to 85.9) | 48.3% (45.2 to 51.1) | 97.0% | 3.98 px |
-
-The ranges of the rows overlap because prints differ a lot from one another. The change on
-the same prints is known more precisely:
-
-| Change, in percentage points | Reported that are marked | Marked that are found |
+| Option | Default | What it does |
 |---|---|---|
-| default to `crop_to_print` | +5.6 (+4.5 to +6.9) | +2.5 (+1.8 to +3.3) |
-| default to `reweight_score` | +1.2 (+0.3 to +2.2) | +5.8 (+4.9 to +6.8) |
-| default to both | +4.9 (+3.9 to +6.0) | +8.2 (+7.0 to +9.3) |
-| `crop_to_print` to both | -0.7 (-1.8 to +0.3) | +5.6 (+4.8 to +6.5) |
-| `crop_to_print` to both with `score_threshold=0.575` | +1.0 (+0.1 to +1.9) | +3.6 (+2.9 to +4.4) |
+| [`refine_direction`](docs/usage.md#direction-sense) | `True` | Takes the direction of each minutia from the ridge pattern, because the direction CoarseNet reports is unreliable |
+| [`image_dpi`](docs/usage.md#direction-sense) | `500` | Scale of the direction step only. It does not rescale the image. Leave it at 500 |
+| [`crop_to_print`](docs/usage.md#finding-more-minutiae) | `False` | Runs the networks on the print area only, which helps on images with a large empty margin |
+| [`reweight_score`](docs/usage.md#finding-more-minutiae) | `False` | Finds more minutiae; changes the meaning of `score`, and an image can come back empty |
+| [`classify_net_path=None`, `core_net_path=None`](docs/usage.md#leaving-out-classifynet-and-corenet) | paths required | Leaves out the minutia type and the core detection |
 
-What this shows:
+## What to expect
 
-- Cropping helps on both counts, and both options together find about a fifth more of the
-  marked minutiae than the default (42.2% to 50.3%) with fewer unmarked detections.
-- The re-weighting finds more of the marked minutiae on every group of prints looked at
-  (about 5 to 8 points). What it does to the precision depends on the capture device, as
-  the next table shows: on these 130 prints as a whole it costs little against cropping
-  alone at 0.55 (-0.7 points, the range includes zero) and nothing at 0.575, but on one
-  of the devices it costs about 3 points at 0.55.
-- The options hardly change how often the direction sense agrees with the examiner
-  (changes between -0.3 and +0.2 points on the 130 prints, all ranges include zero; see
-  the further prints below for a small loss) and do not make the position worse (mean
-  distance to the mark 4.14 px by default, 4.01 px with both).
-- No print came back empty with any setting.
-- Cropping does nothing for the slap images, which have no margin. With both options the
-  share found there rose from 34.0% to 39.6% (+3.8 to +8.0 points) and the precision went
-  from 77.7% to 76.2%, a change that 17 prints cannot settle (-4.8 to +1.9 points).
-- Cropping also saves time on prints with a margin, because CoarseNet and the orientation
-  step have less to process, and the re-weighting costs time, because it sends about 2.4
-  times as many patches through FineNet (18,956 against 7,800 on the 130 prints). Six of
-  the rolled prints were timed with all four settings (one CPU thread, other jobs running,
-  so the times are rough): 454 s in total by default, 230 s with `crop_to_print`, 517 s
-  with `reweight_score`, 336 s with both.
+These figures come from prints of the public NIST SD 302 collection whose minutiae a
+fingerprint examiner had marked, at 500 ppi, on a machine without a GPU. Samples, tables
+and limits are in [docs/measurements.md](docs/measurements.md).
 
-The effect of the re-weighting on precision differs between capture devices. The table
-splits the rolled prints of the 130 by the device code of the collection (C, U, V) and
-adds 18 further rolled prints of 18 subjects that were measured afterwards as an
-independent check (the last two rows; 12 of these subjects appear nowhere in the 130
-prints or in the 40 used to choose the settings). Changes are in percentage points of
-"reported that are marked", with the same 95% intervals as above. The split by device was
-made after the results were seen, so it describes these prints and is not a tested
-prediction.
+- **Not every minutia is found.** With the default settings the extractor found 42% of
+  the examiner-marked minutiae on 130 rolled and slap prints, and 77% of what it reported
+  had an examiner mark. With `crop_to_print` and `reweight_score` together: 50% and 82%.
+  On latent prints (prints left on a surface) it found 29%.
+- **The direction is right for most minutiae it finds:** 96.6% on rolled and slap prints,
+  91.8% on latents.
+- **It is slow on a CPU.** Roughly 20 to 80 seconds per print, depending on the size of
+  the print, the number of minutiae and the networks loaded.
+- **Not measured:** speed or operation on a GPU; throughput on more than a few hundred
+  prints; other sensors than the five of that collection; how often the minutia type is
+  right; how well the core is found; the effect of any option on a DeepPrint model.
 
-| Rolled prints | Cropping alone | Both | Both, 0.575 | Cropping to both | Cropping to both, 0.575 | Default to `reweight_score` |
-|---|---|---|---|---|---|---|
-| Device C, 50 prints, 28 subjects | 81.6% | 82.8% | 84.2% | +1.2 (+0.1 to +2.5) | +2.6 (+1.6 to +3.9) | +4.3 (+3.2 to +5.7) |
-| Device U, 18 prints, 18 subjects | 85.2% | 84.5% | 85.6% | -0.7 (-2.5 to +1.1) | +0.5 (-1.4 to +2.3) | +1.1 (-1.5 to +3.5) |
-| Device V, 45 prints, 45 subjects | 83.0% | 80.2% | 82.5% | -2.8 (-4.8 to -1.2) | -0.5 (-2.2 to +0.9) | -1.7 (-3.9 to +0.2) |
-| Further prints, device U, 6 prints | 83.9% | 83.6% | 83.8% | -0.3 (-2.4 to +1.8) | -0.1 (-2.2 to +1.8) | +5.7 (+1.8 to +9.8) |
-| Further prints, device V, 12 prints | 83.8% | 79.6% | 81.4% | -4.2 (-6.0 to -2.4) | -2.4 (-3.5 to -1.1) | -3.2 (-5.5 to -0.9) |
+## Documentation
 
-On device V the re-weighting lowers the precision that cropping reaches by about 3 to 4
-points at 0.55, and on the 12 further prints by 2.4 points even at 0.575; on device C it
-raises it. In every row the share of marked minutiae found rises by 5.5 to 8.4 points at
-0.55 and by 3.1 to 6.4 points at 0.575, and both options together stay ahead of the default
-on both counts (precision +2.7 to +10.3 points). On the 18 further prints the direction
-sense agreed with the examiner slightly less often with both options than with cropping
-alone: 95.4% against 96.7%, a change of -1.3 points (-2.1 to -0.5), where the 130 prints
-show -0.2 (-0.6 to +0.1). The further prints were run through the unmodified package.
-With all 148 prints taken together (72 subjects, 16,207 marked minutiae), cropping to both
-changes precision by -1.0 points (-2.0 to -0.1) and the share found by +5.9 (+5.1 to
-+6.7); with 0.575 the changes are +0.7 (-0.2 to +1.5) and +3.9 (+3.2 to +4.6).
+| Document | What it is for |
+|---|---|
+| This README | What the repository is, installation, first run |
+| [docs/usage.md](docs/usage.md) | How to prepare images, what each option does and when to use it, use with DeepPrint, reference of parameters and columns |
+| [docs/measurements.md](docs/measurements.md) | Every measured figure with its sample, and what was not measured |
+| [AIR_GAPPED_DEPLOYMENT_GUIDE.md](AIR_GAPPED_DEPLOYMENT_GUIDE.md) | Installation on a machine without internet access |
+| [demo.ipynb](demo.ipynb) | Notebook: run the extractor on the sample image and draw the result |
+| [DeepPrint repository](https://github.com/craig-forefront/fixed-length-fingerprint-extractors) | Extraction over a directory of images (`scripts/extract_minutiae.py`) and DeepPrint training |
 
-For preparing rolled and slap prints as training data, switch both options on:
+## Running the tests
 
-```python
-extractor = Extractor("coarse_net", "fine_net", "classify_net", "core_net",
-                      crop_to_print=True, reweight_score=True)
+`uv sync` does not install pytest. From the repository directory:
+
+```bash
+uv run --with pytest python -m pytest -q
 ```
 
-Keep `score_threshold` at 0.55 to get the most minutiae; keep only the rows with a `score`
-of at least 0.575 if detections without a mark matter more. Do not take 0.575 as a value
-that keeps the precision of cropping alone on every sensor: it did on the 130 prints as a
-whole and did not on device V in the further prints. If unmarked detections matter most,
-note that on devices U and V cropping alone was as precise as both options or more so. These
-figures come from one collection, so before a large run check a sample of your own images
-from each sensor type with and without the options, at least by looking at the minutiae
-drawn on the prints, and choose `score_threshold` again if you have marked minutiae to
-compare with.
+This runs the 79 unit tests in `test/`. They need no model files and no GPU. The tests
+import the package as `src.fingerflow`, so they only work when started in the repository
+directory.
 
-Limits of this evidence: all marks come from one examiner; some unmarked detections are
-real minutiae the examiner did not mark, so the precision figures are lower bounds; the
-default figures come from stored earlier runs of the default path, which fresh runs
-reproduced on the 12 prints that were re-run (same minutiae, scores equal to within
-0.000001); the measurement called FineNet and ClassifyNet through a faster Keras call
-than the package uses, which gave the same minutiae on those 12 prints (1,438 minutiae
-over the three option settings); the prints come from five capture devices of one collection, and the effect on other
-sensors, on latent prints, on the minutia type and on a matcher or a network trained from
-these minutiae was not measured. Images with several fingers were not available: the box encloses every
-textured region of at least a tenth of the largest one, which is covered by a synthetic
-test only. The slap figures rest on 17 prints: the collection has only 33 marked slap
-images, so no further slap sample was available for the independent check. On latent prints cut close to the print, cropping has nothing to remove.
-
-#### Core DataFrame
-
-A Pandas DataFrame with detected fingerprint cores:
-
-| Column | Description |
-|--------|-------------|
-| `x1` | Left coordinate of bounding box |
-| `y1` | Top coordinate of bounding box |
-| `x2` | Right coordinate of bounding box |
-| `y2` | Bottom coordinate of bounding box |
-| `score` | Core detection confidence score (0-1) |
-| `w` | Width of bounding box |
-| `h` | Height of bounding box |
-
-Example:
-```python
-cores_df = extracted_minutiae['core']
-print(f"Found {len(cores_df)} core region(s)")
-
-if len(cores_df) > 0:
-    best_core = cores_df.loc[cores_df['score'].idxmax()]
-    print(f"Core at ({best_core['x1']}, {best_core['y1']})")
-```
-
-## API Reference
-
-### Extractor
-
-The main class for fingerprint feature extraction.
-
-#### Constructor
-
-```python
-Extractor(coarse_net, fine_net, classify_net, core_net, refine_direction=True, image_dpi=500,
-          crop_to_print=False, reweight_score=False, candidate_threshold=0.1,
-          fine_net_weight=0.5, score_threshold=0.55)
-```
-
-**Parameters:**
-- `coarse_net` (str): Path to the coarse network model
-- `fine_net` (str): Path to the fine network model
-- `classify_net` (str or `None`): Path to the classification network model. With `None` the minutiae are not classified: the `class` column is `NaN`, everything else in the result is computed as before, and the time for one network call per minutia is saved
-- `core_net` (str or `None`): Path to the core detection network model. With `None` no cores are detected and `core` in the result is `None`
-- `refine_direction` (bool): Take the direction sense of the minutiae from the image instead of from CoarseNet (default `True`)
-- `image_dpi` (float): Resolution of the input images, used by the direction step only (default `500`)
-- `crop_to_print` (bool): Run the minutiae steps on the part of the image that holds the print and report coordinates in the full image (default `False`; see Finding more minutiae)
-- `reweight_score` (bool): Give the FineNet score more weight, which finds more minutiae and changes the meaning of the `score` column (default `False`; see Finding more minutiae)
-- `candidate_threshold`, `fine_net_weight`, `score_threshold` (float, 0 to 1): Settings of `reweight_score`, ignored while it is off (defaults `0.1`, `0.5`, `0.55`)
-
-#### Methods
-
-##### `extract_minutiae(image_data)`
-
-Extracts minutiae points and detects fingerprint cores from an input image.
-
-**Parameters:**
-- `image_data` (numpy.ndarray): 8-bit (`uint8`) image with dark ridges on a light background, e.g. the output of `cv2.imread()`. Grayscale (2D), BGR and BGRA arrays are accepted
-
-The minutiae networks work at one fixed scale, about 500 ppi, and the extractor does not
-rescale the image (`image_dpi` is used by the direction step only). Resample images of any
-other resolution to 500 ppi before calling. On NIST SD 302 prints, 1000 ppi images passed in
-unchanged gave under 10% of the examiner-marked minutiae (7 exemplars, 12 latents), against
-46% and 24% for the same prints at 500 ppi; shrinking 500 ppi images to 80% of their size
-lowered the share found from 41% to 31% (18 exemplars) and from 25% to 18% (30 latents).
-
-**Returns:**
-- A dictionary containing:
-  - `minutiae`: Pandas DataFrame with minutiae information
-  - `core`: Pandas DataFrame with core detection information
-
-## Project Structure
+## Repository layout
 
 ```
-fingerflow/
-├── models/              
-├── minutiae_patches/    
-├── sample/              
-├── scripts/             
-│   └── install_model.py 
-├── src/                 
-│   └── fingerflow/      
-├── test/                
-├── demo.ipynb           
-├── pyproject.toml       
-├── requirements.txt     
-└── README.md            
+minutiae_extractor/
+├── README.md                        this file
+├── AIR_GAPPED_DEPLOYMENT_GUIDE.md   offline installation
+├── docs/
+│   ├── usage.md                     options and reference
+│   └── measurements.md              measured figures and limits
+├── demo.ipynb                       notebook on the sample image
+├── assets/                          figure used in this README
+├── sample/sample_fingerprint.tif    sample image
+├── src/fingerflow/
+│   ├── extractor/                   the Extractor (maintained)
+│   └── matcher/                     VerifyNet matcher of FingerFlow (not maintained)
+├── scripts/
+│   ├── install_model.py             downloads the weights
+│   └── legacy/                      old FingerFlow scripts (not maintained)
+├── test/                            unit tests
+├── pyproject.toml, uv.lock          dependencies and their locked versions
+├── .devcontainer/                   container definition for VS Code (not tried for this port; asks for a GPU)
+├── minutiae_patches/                image patches written by an old notebook run
+└── models/                          the weights; appears after the download, not in git
 ```
 
-## Development
-### Contributing
+Not maintained means: carried over from the original FingerFlow project, not run or
+tested for this port. For the matcher (`src/fingerflow/matcher`) no weights are
+downloaded. The scripts in `scripts/legacy/` have hard-coded paths of another machine;
+see [scripts/legacy/README.md](scripts/legacy/README.md).
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+## Licence and citation
 
-## Citation
-
-If you use FingerFlow in your research, please cite:
-
-https://arxiv.org/pdf/1712.09401
-
-## Acknowledgments
-
-Models are hosted on Hugging Face: [tourmaline05/MinutiaeNet](https://huggingface.co/tourmaline05/MinutiaeNet)
-
-## Support
-
-For issues, questions, or contributions, please open an issue on the project repository.
-
-## License
-
-[MIT](https://choosealicense.com/licenses/mit/)
+- **Licence.** This repository contains no licence file. Earlier versions of this README
+  named the MIT licence. The model card of the weights on Hugging Face
+  ([tourmaline05/MinutiaeNet](https://huggingface.co/tourmaline05/MinutiaeNet)) declares
+  Apache-2.0. Ask the repository owner before you redistribute code or weights.
+- **Citation.** The networks CoarseNet and FineNet are from: Dinh-Luan Nguyen, Kai Cao
+  and Anil K. Jain, "Robust Minutiae Extractor: Integrating Deep Networks and Fingerprint
+  Domain Knowledge", International Conference on Biometrics 2018,
+  https://arxiv.org/pdf/1712.09401.
+- **Origin of the code.** ClassifyNet, CoreNet and the structure of the package come from
+  the FingerFlow project (https://github.com/jakubarendac/fingerflow).

@@ -22,6 +22,6 @@ dependencies = [
 ]
 
 [tool.pytest.ini_options]
-# The unit tests live in test/. The files under scripts/ are stand-alone measurement scripts
-# with hard-coded paths, not tests, although two of them are named *_test.py.
+# The unit tests live in test/. The files under scripts/legacy/ are stand-alone measurement
+# scripts with hard-coded paths, not tests, although two of them are named *_test.py.
 testpaths = ["test"]
