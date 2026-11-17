@@ -3,7 +3,7 @@
 These files come from the original FingerFlow project and were moved here unchanged.
 They are kept for reference only:
 
-- They contain hard-coded paths of their author's machine (`/home/jakub/...`) and take
+- Nearly all of them contain hard-coded paths of their author's machine (`/home/jakub/...`) and take
   no command-line arguments.
 - They name model files that this repository does not have (`ClassifyNet.h5`,
   `yolo-kernel_best.weights`), and some import modules that do not exist
