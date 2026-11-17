@@ -69,13 +69,15 @@ present).
 
 What to expect:
 
-- `uv sync` installs the exact versions recorded in `uv.lock` (114 packages, TensorFlow
-  2.20.0). The `.venv` directory was 6.4 GB here. 3.9 GB of that are NVIDIA GPU libraries,
+- `uv sync` installs the exact versions recorded in `uv.lock` (TensorFlow 2.20.0). It
+  reported 109 packages installed here; `uv.lock` lists 114, some of them for other
+  platforms. The `.venv` directory was 6.4 GB here. 3.9 GB of that are NVIDIA GPU libraries,
   which are installed on a machine without a GPU as well.
 - `uv sync` does **not** install the `fingerflow` package itself; the next line does. If
   you run `uv sync` again later, it removes the package again: repeat
   `uv pip install -e .`.
-- `scripts/install_model.py` downloads four files (1.6 GB) from the model repository
+- `scripts/install_model.py` downloads the four weight files (1.6 GB), and a small
+  `README.md` with them, from the model repository
   [tourmaline05/MinutiaeNet](https://huggingface.co/tourmaline05/MinutiaeNet) on Hugging
   Face. Check them:
 
@@ -100,7 +102,8 @@ For a machine without internet access see
 
 ## Quick start
 
-Save this as `quickstart.py` in the repository directory:
+Save this as `quickstart.py` in the repository directory (`.gitignore` lists that file
+name, so git does not report it):
 
 ```python
 import cv2
@@ -250,7 +253,7 @@ minutiae_extractor/
 │   └── legacy/                      old FingerFlow scripts (not maintained)
 ├── test/                            unit tests
 ├── pyproject.toml, uv.lock          dependencies and their locked versions
-├── .devcontainer/                   container definition for VS Code
+├── .devcontainer/                   container definition for VS Code (not tried for this port; asks for a GPU)
 ├── minutiae_patches/                image patches written by an old notebook run
 └── models/                          the weights; appears after the download, not in git
 ```
