@@ -1,12 +1,12 @@
 # TODO : fix rules
 # pylint: disable=missing-function-docstring
-"""Code for FineNet in paper "Robust Minutiae Extractor: Integrating Deep Networks and Fingerprint Domain Knowledge" at ICB 2018
+"""Code for CoarseNet in paper "Robust Minutiae Extractor: Integrating Deep Networks and Fingerprint Domain Knowledge" at ICB 2018
   https://arxiv.org/pdf/1712.09401.pdf
 
   If you use whole or partial function in this code, please cite paper:
 
   @inproceedings{Nguyen_MinutiaeNet,
-    author    = {Dinh-Luan Nguyen and Kai Cao and Anil keras_backend. Jain},
+    author    = {Dinh-Luan Nguyen and Kai Cao and Anil K. Jain},
     title     = {Robust Minutiae Extractor: Integrating Deep Networks and Fingerprint Domain Knowledge},
     booktitle = {The 11th International Conference on Biometrics, 2018},
     year      = {2018},
