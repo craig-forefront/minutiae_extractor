@@ -163,8 +163,10 @@ extractor = Extractor("models/CoarseNet.h5", "models/FineNet.h5", None, None,
                       crop_to_print=True, reweight_score=True)
 ```
 
-- For rolled and slap prints, both options together found more of the marked minutiae
-  than the default on every group of prints tested, with fewer unmarked detections.
+- Both options together found more of the marked minutiae than the default on every
+  group of rolled and slap prints tested. On the rolled prints of every device they also
+  gave fewer unmarked detections. On the 17 slap prints the precision went from 77.7% to
+  76.2%, a change that 17 prints cannot settle.
 - Keep `score_threshold` at 0.55 to get the most minutiae. Keep only the rows with a
   `score` of at least 0.575 if detections without a mark matter more to you.
 - Do not take 0.575 as a value that keeps the precision of cropping alone on every

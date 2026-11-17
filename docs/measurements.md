@@ -29,7 +29,8 @@ Contents:
     (also called precision).
   - "Marked that are found" is the share of examiner marks that have a detection (also
     called recall).
-- **Hardware.** A machine with 4 CPU cores and no graphics card (GPU).
+- **Hardware.** No graphics card (GPU) was used for any figure. The number of CPU cores
+  is recorded only for some of the timings; section 6 says for which.
 - **Samples differ between sections.** Each section names its prints, subjects and
   minutiae. Figures from different samples are not expected to be equal: for example, the
   default extractor finds 41% of the marked minutiae on the 259 exemplar prints of
@@ -228,11 +229,14 @@ give a precise loss for a given resolution error.
 
 ## 6. Time and memory on a CPU
 
-All times are from one machine with 4 CPU cores and no GPU, with other jobs running at the
-same time, so they are rough. FineNet, and ClassifyNet if it is loaded, are called once
-per minutia, so the time for a print grows with the number of minutiae.
+All times are from a CPU without a GPU, with other jobs running at the same time, so they
+are rough. FineNet, and ClassifyNet if it is loaded, are called once per minutia, so the
+time for a print grows with the number of minutiae.
 
-**Six rolled SD 302 prints, four option settings** (one CPU thread, all four networks):
+**Six rolled SD 302 prints, four option settings** (one CPU thread; which networks were
+loaded and the number of cores of the machine are not recorded). The measurement they belong to called
+FineNet and ClassifyNet through a faster Keras call than the package uses
+([section 4, limits](#limits-of-this-evidence)), so the package itself may take longer:
 
 | Options | Total for the six prints |
 |---|---|
@@ -245,8 +249,8 @@ That is about 76 s per print by default. Cropping saves time on prints with a ma
 because CoarseNet and the orientation step have less to process. The re-weighting costs
 time, because more patches go through FineNet.
 
-**Eight prints, with and without ClassifyNet.** Measured with the batch script of the
-DeepPrint repository (one process, 8 prints at 500 ppi with 369 minutiae, CoreNet not
+**Eight prints, with and without ClassifyNet.** Quoted from the measurements of the
+DeepPrint repository, made with its batch script (one process on 4 CPU cores, 8 prints at 500 ppi with 369 minutiae, CoreNet not
 loaded): 153 s without ClassifyNet and 263 s with it, with the same 369 positions, angles
 and confidences in both runs.
 
