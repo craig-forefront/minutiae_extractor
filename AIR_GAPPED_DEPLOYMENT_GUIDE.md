@@ -6,12 +6,12 @@ over, and install from it.
 
 For a machine with internet access, use the [README](README.md) instead.
 
-> **Coming from the installation guide of the DeepPrint repository?** You need only three
-> things from this guide: the clone (Step 1.1), the model files `CoarseNet.h5` and
-> `FineNet.h5` (Step 1.2), and the Python packages (Steps 1.3 and 1.4). Put the packages
-> **and** the file `requirements-locked.txt` into the package directory that the DeepPrint
-> guide names, then go back to that guide. Phases 2 and 3 below are for installing this
-> repository on its own.
+> **Coming from the installation guide of the DeepPrint repository?** If that guide gives
+> its own commands for cloning this repository and downloading its packages, follow those
+> and do not use this guide: the file and directory names differ. If it only refers you
+> here, you need the clone (Step 1.1), the model files `CoarseNet.h5` and `FineNet.h5`
+> (Step 1.2), and the Python packages together with the file `requirements-locked.txt`
+> (Steps 1.3 and 1.4). Phases 2 and 3 below are for installing this repository on its own.
 
 ## Overview
 
@@ -76,7 +76,8 @@ ls -l models
 ```
 
 `models/` must then hold `CoarseNet.h5` (81 MB), `FineNet.h5` (654 MB),
-`ClassifyNet_6_classes.h5` (619 MB) and `CoreNet.weights` (256 MB).
+`ClassifyNet_6_classes.h5` (619 MB) and `CoreNet.weights` (256 MB). A small `README.md`
+comes with them and is not needed.
 
 ### Step 1.3: Write the list of locked packages
 
@@ -178,6 +179,11 @@ the [README](README.md#quick-start).
 On a machine without a GPU, TensorFlow prints a message that no CUDA device was found.
 That is expected and not an error.
 
+The notebook of this repository sets the environment variable `CUDA_VISIBLE_DEVICES=-1`
+before it imports TensorFlow, which is TensorFlow's way to ignore a GPU. It is the only
+GPU-related setting that was used for this port, and it was used on a machine without a
+GPU, so that it hides one was not seen here.
+
 ## Troubleshooting
 
 Only failures that were seen while this guide was written or tested are listed.
@@ -191,8 +197,14 @@ the matching Python and transfer again.
 activated (`source .venv/bin/activate`) or the second `pip install` line of Phase 3 was
 not run.
 
+**`FileNotFoundError: [Errno 2] Unable to synchronously open file ...`** or
+**`FileNotFoundError: [Errno 2] No such file or directory: ...`** when the `Extractor` is
+made. A model file is missing or its path is misspelled; the message names the path.
+Check `ls -l models`, and that Python was started in the `minutiae_extractor` directory.
+
 **`ValueError: File format not supported: filepath=...`** when the `Extractor` is made.
-The path of a model file is wrong or the file is missing. Check `ls -l models`.
+The path given for CoarseNet, FineNet or ClassifyNet does not end in `.h5`, for example
+because a directory or a placeholder was passed instead of the file.
 
 **Step 1.4 stops part of the way with a long error.** The disk was full. `pip` needs
 about twice the size of the packages while it downloads. Free space, delete
