@@ -140,3 +140,5 @@ data
 minutiae_patches
 
 .pylintrc
+# written by the steps of AIR_GAPPED_DEPLOYMENT_GUIDE.md
+requirements-locked.txt
